@@ -39,8 +39,8 @@ impl HeartRateDrift for Vec<HeartRateAtTime> {
             sample.time >= FIRST_SEGMENT_LIMIT && sample.time < LAST_SEGMENT_LIMIT
         });
 
-        if first_segment.clone().peekable().peek() == None
-            || second_segment.clone().peekable().peek() == None
+        if first_segment.clone().peekable().peek().is_none()
+            || second_segment.clone().peekable().peek().is_none()
         {
             Err(HeartRateDriftError::NotEnoughSamples)
         } else {
@@ -58,14 +58,14 @@ impl HeartRateDrift for Vec<HeartRateAtTime> {
     }
 }
 
-fn combine_hr_with_time(heart_rates: &Vec<i16>, times: &Vec<i16>) -> Vec<HeartRateAtTime> {
+fn combine_hr_with_time(heart_rates: &[i16], times: &[i16]) -> Vec<HeartRateAtTime> {
     heart_rates
         .iter()
         .copied()
         .zip(times.iter().copied())
         .map(|(rate, time)| HeartRateAtTime {
             heart_rate: rate,
-            time: time,
+            time,
         })
         .collect()
 }
