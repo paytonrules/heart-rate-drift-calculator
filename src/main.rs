@@ -29,29 +29,27 @@ trait HeartRateDrift {
 
 impl HeartRateDrift for Vec<HeartRateAtTime> {
     fn heart_rate_drift(&self) -> Result<f32, HeartRateDriftError> {
-        let without_warm_up = self.iter().filter(|sample| sample.time >= WARM_UP_LIMIT);
+        let first_segment: Vec<i16> = self
+            .iter()
+            .filter(|sample| sample.time >= WARM_UP_LIMIT && sample.time < FIRST_SEGMENT_LIMIT)
+            .map(|sample| sample.heart_rate)
+            .collect();
 
-        let first_segment = without_warm_up
-            .clone()
-            .filter(|sample| sample.time < FIRST_SEGMENT_LIMIT);
+        let second_segment: Vec<i16> = self
+            .iter()
+            .filter(|sample| sample.time >= FIRST_SEGMENT_LIMIT && sample.time < LAST_SEGMENT_LIMIT)
+            .map(|sample| sample.heart_rate)
+            .collect();
 
-        let second_segment = without_warm_up.filter(|sample| {
-            sample.time >= FIRST_SEGMENT_LIMIT && sample.time < LAST_SEGMENT_LIMIT
-        });
-
-        if first_segment.clone().peekable().peek().is_none()
-            || second_segment.clone().peekable().peek().is_none()
-        {
+        if first_segment.is_empty() || second_segment.is_empty() {
             Err(HeartRateDriftError::NotEnoughSamples)
         } else {
-            let first_heart_rate: i16 = first_segment.clone().map(|sample| sample.heart_rate).sum();
-            let second_heart_rate: i16 =
-                second_segment.clone().map(|sample| sample.heart_rate).sum();
-            let avg_heart_rate_first: f32 = first_heart_rate as f32 / first_segment.count() as f32;
-            let avg_heart_rate_second: f32 =
-                second_heart_rate as f32 / second_segment.count() as f32;
+            let first_heart_rate_total: f32 = first_segment.iter().sum::<i16>().into();
+            let second_heart_rate_total: f32 = second_segment.iter().sum::<i16>().into();
+            let avg_heart_rate_first = first_heart_rate_total / first_segment.len() as f32;
+            let avg_heart_rate_second = second_heart_rate_total / second_segment.len() as f32;
 
-            let drift: f32 =
+            let drift =
                 ((avg_heart_rate_second - avg_heart_rate_first) / avg_heart_rate_first) * 100.0;
             Ok(drift)
         }
