@@ -48,11 +48,9 @@ async fn main() -> Result<(), HeartRateDriftError> {
         .url();
 
     if webbrowser::open(auth_url.as_str()).is_ok() {
-        println!("Wait for the server");
         redirect_server
             .await
             .map_err(|_err| HeartRateDriftError::NotEnoughSamples)?;
-        println!("Done waiting");
     }
 
     Ok(())
