@@ -621,6 +621,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "oauth2",
+ "serde",
  "thiserror",
  "tokio",
  "webbrowser",

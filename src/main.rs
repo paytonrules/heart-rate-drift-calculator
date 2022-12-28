@@ -1,30 +1,32 @@
+mod heart_rate_drift;
+use heart_rate_drift::HeartRateDriftError;
+
 use actix_web::{web, App, HttpRequest, HttpServer, Responder};
 use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope};
-use thiserror::Error;
+use serde::Deserialize;
 
 const OAUTH_URL: &str = "https://www.strava.com/oauth/authorize";
 const CLIENT_ID: &str = "96911";
 const CLIENT_SECRET: &str = "4def338c11c2d0ba69eee13bdf9761f7bd6fe090";
 const REDIRECT_URI: &str = "http://localhost:8000";
-//const SCOPE: &str = "&approval_prompt=force&scope=read,activity:read";
 const SCOPE_READ: &str = "read,activity:read";
 
-async fn greet(req: HttpRequest) -> impl Responder {
-    let name = req.match_info().get("name").unwrap_or("World");
-    format!("Hello {}!", &name)
+#[derive(Deserialize)]
+struct AuthToken {
+    code: String,
+}
+
+async fn authenticate(req: web::Query<AuthToken>) -> impl Responder {
+    format!("Authorization request for code={}!", req.code)
 }
 
 #[tokio::main]
 async fn main() -> Result<(), HeartRateDriftError> {
     // Start Server
-    let redirect_server = HttpServer::new(|| {
-        App::new()
-            .route("/", web::get().to(greet))
-            .route("/{name}", web::get().to(greet))
-    })
-    .bind("127.0.0.1:8000")
-    .map_err(|_err| HeartRateDriftError::NotEnoughSamples)?
-    .run();
+    let redirect_server = HttpServer::new(|| App::new().route("/", web::get().to(authenticate)))
+        .bind("127.0.0.1:8000")
+        .map_err(|_err| HeartRateDriftError::NotEnoughSamples)?
+        .run();
 
     // Make Request
     let client = BasicClient::new(
@@ -66,249 +68,3 @@ async fn main() -> Result<(), HeartRateDriftError> {
     // Calculate HR drift and spit it out
     // combine_hr_with_time().heart_rate_drift();*/
 }
-
-const WARM_UP_LIMIT: i16 = 900;
-const FIRST_SEGMENT_LIMIT: i16 = 2700;
-const LAST_SEGMENT_LIMIT: i16 = 4500;
-
-#[derive(PartialEq, Error, Debug)]
-enum HeartRateDriftError {
-    #[error("Not enough samples to calculate drift. For the calculation you need a 15 min warm-up, and two 30 min segments, so at least three samples")]
-    NotEnoughSamples,
-}
-
-#[derive(PartialEq, Debug)]
-struct HeartRateAtTime {
-    heart_rate: i16,
-    time: i16,
-}
-
-trait HeartRateDrift {
-    fn heart_rate_drift(&self) -> Result<f32, HeartRateDriftError>;
-}
-
-impl HeartRateDrift for Vec<HeartRateAtTime> {
-    fn heart_rate_drift(&self) -> Result<f32, HeartRateDriftError> {
-        let first_segment: Vec<i16> = self
-            .iter()
-            .filter(|sample| sample.time >= WARM_UP_LIMIT && sample.time < FIRST_SEGMENT_LIMIT)
-            .map(|sample| sample.heart_rate)
-            .collect();
-
-        let second_segment: Vec<i16> = self
-            .iter()
-            .filter(|sample| sample.time >= FIRST_SEGMENT_LIMIT && sample.time < LAST_SEGMENT_LIMIT)
-            .map(|sample| sample.heart_rate)
-            .collect();
-
-        if first_segment.is_empty() || second_segment.is_empty() {
-            Err(HeartRateDriftError::NotEnoughSamples)
-        } else {
-            let first_heart_rate_total: f32 = first_segment.iter().sum::<i16>().into();
-            let second_heart_rate_total: f32 = second_segment.iter().sum::<i16>().into();
-            let avg_heart_rate_first = first_heart_rate_total / first_segment.len() as f32;
-            let avg_heart_rate_second = second_heart_rate_total / second_segment.len() as f32;
-
-            let drift =
-                ((avg_heart_rate_second - avg_heart_rate_first) / avg_heart_rate_first) * 100.0;
-            Ok(drift)
-        }
-    }
-}
-
-fn combine_hr_with_time(heart_rates: &[i16], times: &[i16]) -> Vec<HeartRateAtTime> {
-    heart_rates
-        .iter()
-        .copied()
-        .zip(times.iter().copied())
-        .map(|(rate, time)| HeartRateAtTime {
-            heart_rate: rate,
-            time,
-        })
-        .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_couple_heart_rates_and_times() {
-        let heart_rates = vec![0, 1, 2];
-        let times = vec![3, 4, 5];
-        let actual_vec = combine_hr_with_time(&heart_rates, &times);
-
-        let expected_vec = vec![
-            HeartRateAtTime {
-                heart_rate: 0,
-                time: 3,
-            },
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: 4,
-            },
-            HeartRateAtTime {
-                heart_rate: 2,
-                time: 5,
-            },
-        ];
-        assert_eq!(expected_vec, actual_vec);
-    }
-
-    #[test]
-    fn test_error_not_enough_samples_for_heart_rate_drift() {
-        let samples = vec![];
-
-        assert_eq!(
-            Err(HeartRateDriftError::NotEnoughSamples),
-            samples.heart_rate_drift()
-        );
-    }
-
-    #[test]
-    fn test_one_sample_is_not_enough_samples_for_heart_rate_drift() {
-        let samples = vec![HeartRateAtTime {
-            heart_rate: 0,
-            time: 1,
-        }];
-
-        assert_eq!(
-            Err(HeartRateDriftError::NotEnoughSamples),
-            samples.heart_rate_drift()
-        );
-    }
-
-    #[test]
-    fn test_three_samples_one_in_each_window_is_enough() {
-        let samples = vec![
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: WARM_UP_LIMIT - 1,
-            },
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: FIRST_SEGMENT_LIMIT - 1,
-            },
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: LAST_SEGMENT_LIMIT - 1,
-            },
-        ];
-
-        assert_eq!(Ok(0.0), samples.heart_rate_drift());
-    }
-
-    #[test]
-    fn test_missing_sample_in_last_segment_is_an_error() {
-        let samples = vec![
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: WARM_UP_LIMIT - 1,
-            },
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: FIRST_SEGMENT_LIMIT - 2,
-            },
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: FIRST_SEGMENT_LIMIT - 1,
-            },
-        ];
-
-        assert_eq!(
-            Err(HeartRateDriftError::NotEnoughSamples),
-            samples.heart_rate_drift()
-        );
-    }
-
-    #[test]
-    fn test_missing_sample_in_first_segment_is_an_error() {
-        let samples = vec![
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: WARM_UP_LIMIT - 1,
-            },
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: FIRST_SEGMENT_LIMIT + 1,
-            },
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: FIRST_SEGMENT_LIMIT + 2,
-            },
-        ];
-
-        assert_eq!(
-            Err(HeartRateDriftError::NotEnoughSamples),
-            samples.heart_rate_drift()
-        );
-    }
-
-    #[test]
-    fn test_missing_sample_in_warm_up_is_fine() {
-        let samples = vec![
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: WARM_UP_LIMIT + 1,
-            },
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: FIRST_SEGMENT_LIMIT + 1,
-            },
-        ];
-
-        assert_eq!(Ok(0.0), samples.heart_rate_drift());
-    }
-
-    #[test]
-    fn test_calculate_heart_rate_drift_of_valid_samples_via_percentage_rise_between_averages() {
-        let samples = vec![
-            HeartRateAtTime {
-                heart_rate: 1,
-                time: WARM_UP_LIMIT + 1,
-            },
-            HeartRateAtTime {
-                heart_rate: 2,
-                time: FIRST_SEGMENT_LIMIT + 1,
-            },
-        ];
-
-        assert_eq!(Ok(100.0), samples.heart_rate_drift());
-    }
-}
-
-/* Example data:
-
-Where you need the activity ID, and you need to make sure your access token (which is in the Auth header)
-Has activity:read_all scope. You might need to switch it from your normal token via the directions here:
-
-https://jessicasalbert.medium.com/holding-your-hand-through-stravas-api-e642d15695f2
-
-That part is unclear.
-
-Query is - https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
-
-You'll get back two streams - HR and time that look like this:
-
-"heartrate": {
-"data": [
-80,
-83,
-89,
-92,
-...]
-
-and
-"time": {
-"data": [
-0,
-2,
-4,
-5,
-7,
-10,
-...]
-
-Those should have the same resolution - I hope. They did in my first test query anyway. So just sync those up, trim the first 15
-min, and you got it.
-*/
