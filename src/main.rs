@@ -9,9 +9,22 @@ const REDIRECT_URI: &str = "http://localhost:8000";
 //const SCOPE: &str = "&approval_prompt=force&scope=read,activity:read";
 const SCOPE_READ: &str = "read,activity:read";
 
+async fn greet(req: HttpRequest) -> impl Responder {
+    let name = req.match_info().get("name").unwrap_or("World");
+    format!("Hello {}!", &name)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), HeartRateDriftError> {
     // Start Server
+    let redirect_server = HttpServer::new(|| {
+        App::new()
+            .route("/", web::get().to(greet))
+            .route("/{name}", web::get().to(greet))
+    })
+    .bind("127.0.0.1:8000")
+    .map_err(|_err| HeartRateDriftError::NotEnoughSamples)?
+    .run();
 
     // Make Request
     let client = BasicClient::new(
@@ -27,31 +40,23 @@ async fn main() -> Result<(), HeartRateDriftError> {
             .map_err(|_err| HeartRateDriftError::NotEnoughSamples)?,
     );
 
-    let (auth_url, csrf_token) = client
+    let (auth_url, _csrf_token) = client
         .authorize_url(CsrfToken::new_random)
         .add_scope(Scope::new(SCOPE_READ.to_string()))
         .url();
 
     if webbrowser::open(auth_url.as_str()).is_ok() {
-        println!("We did it!");
+        println!("Wait for the server");
+        redirect_server
+            .await
+            .map_err(|_err| HeartRateDriftError::NotEnoughSamples)?;
+        println!("Done waiting");
     }
 
     Ok(())
 
-    // Make request
-    // Browser?
-
     // Start server
     /*
-    HttpServer::new(|| {
-        App::new()
-            .route("/", web::get().to(greet))
-            .route("/{name}", web::get().to(greet))
-    })
-    .bind("127.0.0.1:8000")?
-    .run()
-    .await
-
     // Get code and store it ....somewhere on the redirect ....Arc<RefCell>
     // Shutdown server
 
