@@ -1,0 +1,11 @@
+* Remaining
+- Take the code you got from auth, and make a request to the server for the HR data
+  - Calculate the value
+  - Spit out to browser or command line.
+  - Does that need to be async?
+- Don't just use a hard code path to a run I happened to do in June, take those as command line params
+- Write an actual README
+- Start doing some proper design/TDD on the OAuth interaction part
+- Cleanup all the warnings in the code
+- Exit the server nicely
+- Add some of that PKE and CSRF for forgery and the like

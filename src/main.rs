@@ -2,22 +2,58 @@ mod heart_rate_drift;
 use heart_rate_drift::HeartRateDriftError;
 
 use actix_web::{web, App, HttpRequest, HttpServer, Responder};
-use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope};
+use oauth2::{
+    basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope, TokenUrl,
+};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 const OAUTH_URL: &str = "https://www.strava.com/oauth/authorize";
 const CLIENT_ID: &str = "96911";
 const CLIENT_SECRET: &str = "4def338c11c2d0ba69eee13bdf9761f7bd6fe090";
 const REDIRECT_URI: &str = "http://localhost:8000";
-const SCOPE_READ: &str = "read,activity:read";
+const SCOPE_READ: &str = "activity:read_all";
 
 #[derive(Deserialize)]
 struct AuthToken {
     code: String,
 }
 
+#[derive(Deserialize, Debug)]
+struct ExchangeResponse {
+    access_token: String,
+}
+
 async fn authenticate(req: web::Query<AuthToken>) -> impl Responder {
-    format!("Authorization request for code={}!", req.code)
+    let client = reqwest::ClientBuilder::new().build().expect("BOOM?");
+    let res_exchange = client
+        .post("https://www.strava.com/oauth/token")
+        .query(&[
+            ("client_id", CLIENT_ID),
+            ("client_secret", CLIENT_SECRET),
+            ("code", &req.code),
+            ("grant_type", "authorization_code"),
+        ])
+        .send()
+        .await
+        .expect("Mother puss bucket")
+        .json::<ExchangeResponse>()
+        .await
+        .expect("Boom Oauth");
+
+    println!("map is {:#?}", res_exchange);
+
+    let res = client
+        .get("https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true")
+        .header("Authorization", "Bearer ".to_owned() + &res_exchange.access_token)
+        .send()
+        .await
+        .expect("BOOM")
+        .text()
+        .await
+        .expect("BOOM FOR REAL");
+
+    format!("Result equals (warning probably big) {}", res)
 }
 
 #[tokio::main]
@@ -46,6 +82,7 @@ async fn main() -> Result<(), HeartRateDriftError> {
         .authorize_url(CsrfToken::new_random)
         .add_scope(Scope::new(SCOPE_READ.to_string()))
         .url();
+    println!("auth_url {}", auth_url.as_str());
 
     if webbrowser::open(auth_url.as_str()).is_ok() {
         redirect_server
