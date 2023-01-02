@@ -1,4 +1,6 @@
 mod heart_rate_drift;
+mod infrastructure;
+
 use heart_rate_drift::HeartRateDriftError;
 
 use actix_web::{web, App, HttpRequest, HttpServer, Responder};
@@ -90,10 +92,26 @@ async fn main() -> Result<(), HeartRateDriftError> {
     Ok(())
 }
 
+struct Application {}
+
+impl Application {
+    fn new() -> Self {
+        Application {}
+    }
+
+    fn drift(&self) -> String {
+        String::from("0.0%")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn initial_app_test() {}
+    fn initial_app_test() {
+        let app = Application::new();
+
+        assert_eq!(String::from("0.0%"), app.drift());
+    }
 }

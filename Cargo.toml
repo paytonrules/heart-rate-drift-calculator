@@ -14,3 +14,6 @@ actix-web = "4"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
+
+[dev-dependencies]
+http = "0.2"
