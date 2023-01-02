@@ -1,4 +1,53 @@
-* Remaining
+* Heart Rate Drift / Decoupling calculator
+
+This is simple calculator meant to be used with the Stava API for calculating your Heart Rate Drift,
+also known as "decoupling". This is a pretty simple calculation, but is only available with
+Training Peaks premium edition. This had been available on a free website, but I can no longer find it.
+
+** Heart Rate Drift Test
+
+The directions to running the test are here: https://uphillathlete.com/aerobic-training/heart-rate-drift/
+
+** Using the app
+
+TBD
+
+** Architecture
+
+This is also my experiment in using the patterns in https://www.jamesshore.com/v2/blog/2018/testing-without-mocks#a-frame-arch
+in order to get more testing, and do better TDD. Over the last few years I've gotten rusty.
+
+To do that I want to spend a little time identifying the various "services" or ports or infrastructure. James's core idea
+is to separate your app into Infrastructure, Logic and Application/UI. So let's make a little diagram
+to show how it might work:
+
+#+BEGIN_SRC mermaid :file pic.png
+  sequenceDiagram
+    Application->>UI: Parse Command Line Args
+    Application->>Infrastructure: Start Server
+    Application->>Infrastructure: Authenticate
+    Application->>Infrastructure: Fetch Data
+    Application->>Logic: Calculate HR Drift
+    Application->>UI: Print out results 
+#+END_SRC
+
+#+RESULTS:
+[[file:pic.png]]
+
+Some details I haven't figured out, should I use Logic Sandwich or Traffic Cop? Because the
+app needs an authentication token ( which is an implementation detail that I don't know that I want)
+a Traffic cop may be better. That way you have access to the server to shut it down.
+
+I'll start at logic sandwich with my first real test.
+
+** "Focused Integration Tests"
+
+I'll try out the Rust integration testing for this. I've never used it before, so that should be fun.
+
+* TODOs
+
+Don't expect this to be the accurate, it's more of a double-check list before I call this done.
+
 - Take the code you got from auth, and make a request to the server for the HR data
   - Calculate the value
   - Spit out to browser or command line.
@@ -9,3 +58,55 @@
 - Cleanup all the warnings in the code
 - Exit the server nicely
 - Add some of that PKE and CSRF for forgery and the like
+
+* Comments
+
+Some comments that were in the codebase as I clean things up.
+    // Start server
+    /*
+    // Get code and store it ....somewhere on the redirect ....Arc<RefCell>
+    // Shutdown server
+
+    // Make API call to it to get the info from the given race (via command line)
+    // https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
+
+    // Calculate HR drift and spit it out
+    // combine_hr_with_time().heart_rate_drift();*/
+
+
+    
+/* Example data:
+
+Where you need the activity ID, and you need to make sure your access token (which is in the Auth header)
+Has activity:read_all scope. You might need to switch it from your normal token via the directions here:
+
+https://jessicasalbert.medium.com/holding-your-hand-through-stravas-api-e642d15695f2
+
+That part is unclear.
+
+Query is - https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
+
+You'll get back two streams - HR and time that look like this:
+
+"heartrate": {
+"data": [
+80,
+83,
+89,
+92,
+...]
+
+and
+"time": {
+"data": [
+0,
+2,
+4,
+5,
+7,
+10,
+...]
+
+Those should have the same resolution - I hope. They did in my first test query anyway. So just sync those up, trim the first 15
+min, and you got it.
+*/
