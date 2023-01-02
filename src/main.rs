@@ -6,7 +6,6 @@ use oauth2::{
     basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope, TokenUrl,
 };
 use serde::Deserialize;
-use std::collections::HashMap;
 
 const OAUTH_URL: &str = "https://www.strava.com/oauth/authorize";
 const CLIENT_ID: &str = "96911";
@@ -40,8 +39,6 @@ async fn authenticate(req: web::Query<AuthToken>) -> impl Responder {
         .json::<ExchangeResponse>()
         .await
         .expect("Boom Oauth");
-
-    println!("map is {:#?}", res_exchange);
 
     let res = client
         .get("https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true")
@@ -91,15 +88,12 @@ async fn main() -> Result<(), HeartRateDriftError> {
     }
 
     Ok(())
+}
 
-    // Start server
-    /*
-    // Get code and store it ....somewhere on the redirect ....Arc<RefCell>
-    // Shutdown server
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    // Make API call to it to get the info from the given race (via command line)
-    // https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
-
-    // Calculate HR drift and spit it out
-    // combine_hr_with_time().heart_rate_drift();*/
+    #[test]
+    fn initial_app_test() {}
 }

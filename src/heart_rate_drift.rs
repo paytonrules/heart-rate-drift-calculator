@@ -209,39 +209,3 @@ mod tests {
         assert_eq!(Ok(100.0), samples.heart_rate_drift());
     }
 }
-
-/* Example data:
-
-Where you need the activity ID, and you need to make sure your access token (which is in the Auth header)
-Has activity:read_all scope. You might need to switch it from your normal token via the directions here:
-
-https://jessicasalbert.medium.com/holding-your-hand-through-stravas-api-e642d15695f2
-
-That part is unclear.
-
-Query is - https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
-
-You'll get back two streams - HR and time that look like this:
-
-"heartrate": {
-"data": [
-80,
-83,
-89,
-92,
-...]
-
-and
-"time": {
-"data": [
-0,
-2,
-4,
-5,
-7,
-10,
-...]
-
-Those should have the same resolution - I hope. They did in my first test query anyway. So just sync those up, trim the first 15
-min, and you got it.
-*/
