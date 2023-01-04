@@ -1,7 +1,14 @@
 use reqwest::{Error, Response};
+use std::future::Future;
 use thiserror::Error;
 
-pub struct Strava;
+pub trait StravaClient {
+    fn request() -> Box<dyn Future<Output = Result<Response, Error>>>;
+}
+
+pub struct Strava<T: StravaClient> {
+    strava_client: T,
+}
 
 pub struct HeartRateSamples {
     pub rates: Vec<i16>,
@@ -14,13 +21,11 @@ pub enum ErrorGettingHeartRateData {
     ConnectionError,
 }
 
-struct NullParams {
-    response: Option<Result<Response, Error>>,
-}
-
-impl Strava {
-    fn create_null(params: NullParams) -> Self {
-        Strava
+impl<T: StravaClient> Strava<T> {
+    fn create_null(params: NullClient) -> Strava<NullClient> {
+        Strava {
+            strava_client: params,
+        }
     }
 
     // Untested, unworking, etc
@@ -39,6 +44,16 @@ impl Strava {
             rates: vec![],
             times: vec![],
         })
+    }
+}
+
+struct NullClient {
+    response: Option<Result<Response, Error>>,
+}
+
+impl StravaClient for NullClient {
+    fn request() -> Box<dyn Future<Output = Result<Response, Error>>> {
+        todo!()
     }
 }
 
@@ -66,7 +81,7 @@ mod tests {
 
         let response = create_reqwest_valid_response(empty_json);
 
-        let strava = Strava::create_null(NullParams {
+        let strava = Strava::<NullClient>::create_null(NullClient {
             response: Some(Ok(response)),
         });
 
