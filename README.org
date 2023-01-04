@@ -6,7 +6,15 @@ Training Peaks premium edition. This had been available on a free website, but I
 
 ** Heart Rate Drift Test
 
-The directions to running the test are here: https://uphillathlete.com/aerobic-training/heart-rate-drift/
+The directions to running the test are here: https://uphillathlete.com/aerobic-training/heart-rate-drift/. This is the short version:
+- Run for at least 75 minutes, wearing a HR monitor. 15 minute warm up to get to your predetermined "steady" HR. This should be an easy
+  pace HR. You should not be concerned that you won't complete the run.
+
+- Calculate the difference in average HR from the first 30 minutes (after warm up) to the second 30 minutes. If the second 30 minutes has
+  an average HR of more than 5% higher than your first 30 minutes, then you were running too fast to determine your Aerobic Threshold heart-rate (V1).
+  If the difference is less than 3.5% higher then you were probably too slow. Finding the real spot is tricky.
+
+  The test is used not to change your HR, but to see if you're going the same speed or faster at that HR over time.
 
 ** Using the app
 
@@ -15,11 +23,10 @@ TBD
 ** Architecture
 
 This is also my experiment in using the patterns in https://www.jamesshore.com/v2/blog/2018/testing-without-mocks#a-frame-arch
-in order to get more testing, and do better TDD. Over the last few years I've gotten rusty.
+in order to get more testing, and do better TDD. Over the last few years I've gotten rusty (no pun intended).
 
 To do that I want to spend a little time identifying the various "services" or ports or infrastructure. James's core idea
-is to separate your app into Infrastructure, Logic and Application/UI. So let's make a little diagram
-to show how it might work:
+is to separate your app into Infrastructure, Logic and Application/UI. So let's make a little diagram to show how it might work:
 
 #+BEGIN_SRC mermaid :file pic.png
   sequenceDiagram
@@ -35,19 +42,56 @@ to show how it might work:
 [[file:pic.png]]
 
 Some details I haven't figured out, should I use Logic Sandwich or Traffic Cop? Because the
-app needs an authentication token ( which is an implementation detail that I don't know that I want)
+app needs an authentication token (which is an implementation detail that I don't know that I want)
 a Traffic cop may be better. That way you have access to the server to shut it down.
 
-I'll start at logic sandwich with my first real test.
+I'll start at logic sandwich with my first real test, following "Grow Evolutionary Seeds" approach.
 
 ** "Focused Integration Tests"
 
-I'll try out the Rust integration testing for this. I've never used it before, so that should be fun.
+I'll try out the Rust integration testing for this. I've never used it before, so that should be fun. Since I've
+already got actix-web in here, spawning a webserver shouldn't bee too hard (ha!).
+
+* Manually getting responses via Postman/Browser
+
+I keep forgetting how to do this so I'll write it down this time. You have to start
+with the browser. Step one make a browser request with this URL:
+
+https://www.strava.com/oauth/authorize?client_id=<CLIENT_ID>&response_type=code&redirect_uri=http://localhost/<DOESNT_REALLY_MATTER>&approval_prompt=force&scope=activity:read
+
+Authorize Strava and approve the authorization. This will redirect back to the browser, which will fail (cause
+you aren't running a server). Pull the code off of the redirect url, it's the field ~code~.
+
+That's not enough. Now that you have a ~code~ you have to exchange it for an access token. You can do that through Postman. Run a Post request to get the token with something
+like this:
+
+https://www.strava.com/oauth/token?client_id=<CLIENT_ID>&grant_type=authorization_code&client_secret=<SECRET>&code=<CODE>
+
+That sends you JSON that looks like this:
+
+#+BEGIN_SRC json
+    {
+      "token_type": "Bearer",
+      "expires_at": 1672721958,
+      "expires_in": 21600,
+      "refresh_token": "<TOKEN>",
+      "access_token": "<ACCESS_TOKEN>",
+      "athlete": {
+      }
+  }
+#+END_SRC
+
+Now you can use the access_token in further requests. Here's an example from my AeT test:
+
+https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
+
+You need to have the Authorization header with "Bearer <ACCESS_TOKEN>" to get valid data.
 
 * TODOs
 
 Don't expect this to be the accurate, it's more of a double-check list before I call this done.
 
+- Figure out where secrets should go. I'm not sure they need to be hidden from source control.
 - Take the code you got from auth, and make a request to the server for the HR data
   - Calculate the value
   - Spit out to browser or command line.
@@ -110,3 +154,4 @@ and
 Those should have the same resolution - I hope. They did in my first test query anyway. So just sync those up, trim the first 15
 min, and you got it.
 */
+
