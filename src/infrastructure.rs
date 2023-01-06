@@ -1,13 +1,17 @@
+use http::response::Builder;
 use reqwest::{Error, Response};
-use std::future::Future;
+use serde::Deserialize;
 use thiserror::Error;
 
-pub trait StravaClient {
-    fn request() -> Box<dyn Future<Output = Result<Response, Error>>>;
+#[derive(Deserialize)]
+pub struct Samples {
+    data: Vec<i16>,
 }
 
-pub struct Strava<T: StravaClient> {
-    strava_client: T,
+#[derive(Deserialize)]
+pub struct StravaData {
+    heartrate: Samples,
+    time: Samples,
 }
 
 pub struct HeartRateSamples {
@@ -21,6 +25,14 @@ pub enum ErrorGettingHeartRateData {
     ConnectionError,
 }
 
+pub trait StravaClient {
+    async fn request(&self) -> Result<Response, Error>;
+}
+
+pub struct Strava<T: StravaClient> {
+    strava_client: T,
+}
+
 impl<T: StravaClient> Strava<T> {
     fn create_null(params: NullClient) -> Strava<NullClient> {
         Strava {
@@ -28,48 +40,66 @@ impl<T: StravaClient> Strava<T> {
         }
     }
 
-    // Untested, unworking, etc
+    // At this point this works with NullClient, but only because
+    // it doesn't use the response and instead returns empty vectors of JSON
+    // You need to:
+    //   - pass in the activity and the token
+    // I'll use the integration test to make sure those work, but using a simple server
+    //   - See the README for the correct URL and token
+    // Eventually handle errors
     pub async fn get_activity_heart_rate(
         &self,
     ) -> Result<HeartRateSamples, ErrorGettingHeartRateData> {
-        let token = "temp";
-        let client = reqwest::ClientBuilder::new().build().expect("BOOM?");
-        let res = client
-            .get("https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true")
-            .header("Authorization", "Bearer ".to_owned() + &token)
-            .send()
-            .await;
+        let res = self
+            .strava_client
+            .request()
+            .await
+            .expect("BE GOOD")
+            .json::<StravaData>()
+            .await
+            .expect("Be JSON");
 
         Ok(HeartRateSamples {
-            rates: vec![],
-            times: vec![],
+            rates: res.heartrate.data,
+            times: res.time.data,
         })
     }
 }
 
 struct NullClient {
-    response: Option<Result<Response, Error>>,
+    valid_response: Option<&'static str>,
+    error: Option<Error>,
+}
+
+impl NullClient {
+    fn response_from_valid_response_str(&self) -> Response {
+        let response = Builder::new()
+            .status(200)
+            .body(self.valid_response.unwrap())
+            .unwrap();
+        Response::from(response)
+    }
 }
 
 impl StravaClient for NullClient {
-    fn request() -> Box<dyn Future<Output = Result<Response, Error>>> {
-        todo!()
+    async fn request(&self) -> Result<Response, Error> {
+        Ok(self.response_from_valid_response_str())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http::response::Builder;
-    use reqwest::Response;
 
-    fn create_reqwest_valid_response(body: &str) -> Response {
-        let response = Builder::new().status(200).body("foo").unwrap();
-        Response::from(response)
+    fn create_null_strava_client_with_response(response: &'static str) -> Strava<NullClient> {
+        Strava::<NullClient>::create_null(NullClient {
+            valid_response: Some(response),
+            error: None,
+        })
     }
 
     #[tokio::test]
-    async fn null_strava_client_returns_passed_in_value() {
+    async fn get_activity_heart_rate_converts_empty_arrays() {
         let empty_json = "{
     \"heartrate\": {
         \"data\": []
@@ -77,17 +107,30 @@ mod tests {
     \"time\": {
         \"data\": []
     }
-};";
-
-        let response = create_reqwest_valid_response(empty_json);
-
-        let strava = Strava::<NullClient>::create_null(NullClient {
-            response: Some(Ok(response)),
-        });
+}";
+        let strava = create_null_strava_client_with_response(empty_json);
 
         let result = strava.get_activity_heart_rate().await.unwrap();
 
         assert!(result.rates.is_empty());
         assert!(result.times.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_activity_heart_rate_converts_arrays_with_one_value() {
+        let empty_json = "{
+    \"heartrate\": {
+        \"data\": [2]
+    },
+    \"time\": {
+        \"data\": [3]
+    }
+}";
+        let strava = create_null_strava_client_with_response(empty_json);
+
+        let result = strava.get_activity_heart_rate().await.unwrap();
+
+        assert_eq!(result.rates, vec![2]);
+        assert_eq!(result.times, vec![3]);
     }
 }

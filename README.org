@@ -4,6 +4,10 @@ This is simple calculator meant to be used with the Stava API for calculating yo
 also known as "decoupling". This is a pretty simple calculation, but is only available with
 Training Peaks premium edition. This had been available on a free website, but I can no longer find it.
 
+** Requirements
+
+This requires the nightly compiler to use the ~async_fn_in_trait~ feature, until that stabilizes.
+
 ** Heart Rate Drift Test
 
 The directions to running the test are here: https://uphillathlete.com/aerobic-training/heart-rate-drift/. This is the short version:
@@ -129,6 +133,7 @@ https://jessicasalbert.medium.com/holding-your-hand-through-stravas-api-e642d156
 That part is unclear.
 
 Query is - https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
+Do not forget to add the "Authoriation Bearer <token>" to the header.
 
 You'll get back two streams - HR and time that look like this:
 
