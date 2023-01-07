@@ -6,9 +6,7 @@ mod infrastructure;
 use heart_rate_drift::HeartRateDriftError;
 
 use actix_web::{web, App, HttpRequest, HttpServer, Responder};
-use oauth2::{
-    basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope, TokenUrl,
-};
+use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope};
 use serde::Deserialize;
 
 const OAUTH_URL: &str = "https://www.strava.com/oauth/authorize";
