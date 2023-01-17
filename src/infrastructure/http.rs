@@ -1,6 +1,27 @@
-use core::future::Future;
 use http::response::Builder;
 use reqwest::Response;
+
+struct Url(&'static str);
+struct AuthToken(&'static str);
+
+struct Client {}
+
+impl Client {
+    pub fn new() -> Self {
+        Client {}
+    }
+
+    pub async fn request(&self, url: Url, token: AuthToken) -> Result<Response, Error> {
+        Err(Error::Unknown)
+    }
+}
+
+// Meant to be used as http::error
+#[derive(thiserror::Error, PartialEq, Debug)]
+pub enum Error {
+    #[error("Unknown error")]
+    Unknown,
+}
 
 trait SimpleHttpClient {
     fn new() -> Self;
@@ -14,7 +35,7 @@ trait SimpleHttpClient {
     async fn send(self) -> Result<Response, reqwest::Error>;
 }
 
-struct Client {
+struct ReqwestWrapper {
     reqwest_client: reqwest::Client,
     reqwest_builder: Option<reqwest::RequestBuilder>,
 }
@@ -24,7 +45,8 @@ struct Client {
 // I unified this into one API.
 // However because client has the reqwest_builder, and it can be None, this can crash
 // Don't make it public
-impl SimpleHttpClient for Client {
+// TODO Maybe this can just be the reqwest_builder
+impl SimpleHttpClient for ReqwestWrapper {
     fn new() -> Self {
         Self {
             reqwest_client: reqwest::Client::new(),
@@ -73,7 +95,7 @@ impl SimpleHttpClient for NullClient {
     }
 
     fn get<U: reqwest::IntoUrl>(&self, url: U) -> Self {
-        self.clone()
+        *self
     }
 
     fn header<K, V>(self, key: K, value: V) -> Self
@@ -96,6 +118,8 @@ impl SimpleHttpClient for NullClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_web::{get, web, App, HttpRequest, HttpServer, Responder, Result};
+    use serde::{Deserialize, Serialize};
 
     #[tokio::test]
     async fn null_http_client_returns_empty_response() {
@@ -109,4 +133,64 @@ mod tests {
 
         assert_eq!(response.unwrap().status(), 200);
     }
+
+    #[derive(Serialize, Deserialize)]
+    struct EchoResponse {
+        auth_header: String,
+        body: String,
+    }
+
+    #[get("/{path}")]
+    async fn index(path: web::Path<String>, req: HttpRequest) -> Result<impl Responder> {
+        println!("I get here the world is good!");
+        let body = path.into_inner();
+        let auth_header = String::from(
+            req.headers()
+                .get("Authorization")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+        );
+        let obj = EchoResponse { auth_header, body };
+        Ok(web::Json(obj))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn focused_integration_test_on_client() {
+        // Start echo server server in one thread
+        let server = tokio::spawn({
+            println!("DO I GET HERE?");
+            HttpServer::new(|| App::new().service(index))
+                .bind("127.0.0.1:8081")
+                .expect("Could not bind test server to port 8081")
+                .run()
+        });
+
+        // create real client
+        let client = Client::new();
+
+        // Make request
+        // TODO Reminder you aren't actually making the request yet, you need to
+        // test drive this in
+        // await might actually let the Http server run. Not sure
+        let response = client
+            .request(
+                Url("https://127.0.0.1:8081/request_path"),
+                AuthToken("Bearer irrelevant"),
+            )
+            .await;
+
+        assert!(response.is_ok());
+        let json = response.unwrap().json::<EchoResponse>().await;
+        assert!(json.is_ok());
+        let response = json.unwrap();
+
+        assert_eq!(response.auth_header, String::from("Bearer irrelevant"));
+        assert_eq!(response.body, String::from("request_path"));
+        // How to kill the http server? Will exiting the test take care of it?
+    }
+
+    // Then the rest is unit tests with headers,
+    // then you work back up to the application layer, which is kind of a mess right now (I think mod.rs has a bunch of
+    // duplicate code
 }
