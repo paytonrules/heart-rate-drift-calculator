@@ -4,13 +4,27 @@ use reqwest::Response;
 struct Url(&'static str);
 struct AuthToken(&'static str);
 
-struct Client {}
+struct Client<T: SimpleHttpClient> {
+    http_client: T,
+}
 
-impl Client {
+impl Client<ReqwestWrapper> {
     pub fn new() -> Self {
-        Client {}
+        Client {
+            http_client: ReqwestWrapper::new(),
+        }
     }
+}
 
+impl Client<NullClient> {
+    pub fn create_null() -> Client<NullClient> {
+        Client {
+            http_client: NullClient::new(),
+        }
+    }
+}
+
+impl<T: SimpleHttpClient> Client<T> {
     pub async fn request(&self, url: Url, token: AuthToken) -> Result<Response, Error> {
         Err(Error::Unknown)
     }
@@ -159,7 +173,6 @@ mod tests {
     async fn focused_integration_test_on_client() {
         // Start echo server server in one thread
         let server = tokio::spawn({
-            println!("DO I GET HERE?");
             HttpServer::new(|| App::new().service(index))
                 .bind("127.0.0.1:8081")
                 .expect("Could not bind test server to port 8081")
