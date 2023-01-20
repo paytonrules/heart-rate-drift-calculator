@@ -1,8 +1,8 @@
 use http::response::Builder;
 use reqwest::Response;
 
-struct Url(&'static str);
-struct AuthToken(&'static str);
+struct Url<'a>(&'a str);
+struct AuthToken<'a>(&'a str);
 
 struct Client<T: SimpleHttpClient> {
     http_client: T,
@@ -25,12 +25,20 @@ impl Client<NullClient> {
 }
 
 impl<T: SimpleHttpClient> Client<T> {
-    pub async fn request(&self, url: Url, token: AuthToken) -> Result<Response, Error> {
-        Err(Error::Unknown)
+    pub async fn request(&self, url: Url<'_>, token: AuthToken<'_>) -> Result<Response, Error> {
+        self.http_client
+            .get(url.0)
+            .header("Authorization", format!("Bearer {}", token.0))
+            .send()
+            .await
+            .map_err(|_err| {
+                println!("err {} {_err}", _err.is_connect());
+                Error::Unknown
+            })
     }
 }
 
-// Meant to be used as http::error
+// Meant to be used as http::Error
 #[derive(thiserror::Error, PartialEq, Debug)]
 pub enum Error {
     #[error("Unknown error")]
@@ -132,7 +140,8 @@ impl SimpleHttpClient for NullClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{get, web, App, HttpRequest, HttpServer, Responder, Result};
+    mod server;
+    use actix_web::{get, web, App, HttpRequest, HttpServer, Responder};
     use serde::{Deserialize, Serialize};
 
     #[tokio::test]
@@ -151,56 +160,57 @@ mod tests {
     #[derive(Serialize, Deserialize)]
     struct EchoResponse {
         auth_header: String,
-        body: String,
+        uri: String,
     }
-
+    /*
     #[get("/{path}")]
     async fn index(path: web::Path<String>, req: HttpRequest) -> Result<impl Responder> {
-        println!("I get here the world is good!");
+        println!("Into the path");
         let body = path.into_inner();
         let auth_header = String::from(
             req.headers()
                 .get("Authorization")
-                .unwrap()
-                .to_str()
-                .unwrap(),
+                .and_then(|val| val.to_str().ok())
+                .unwrap_or_default(),
         );
         let obj = EchoResponse { auth_header, body };
         Ok(web::Json(obj))
-    }
+    }*/
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn focused_integration_test_on_client() {
-        // Start echo server server in one thread
-        let server = tokio::spawn({
-            HttpServer::new(|| App::new().service(index))
-                .bind("127.0.0.1:8081")
-                .expect("Could not bind test server to port 8081")
-                .run()
+    #[tokio::test]
+    async fn focused_integration_test_for_client() -> anyhow::Result<()> {
+        let server = server::http(|req| async move {
+            let uri = req.uri().to_string();
+            let auth_header = String::from(
+                req.headers()
+                    .get("Authorization")
+                    .and_then(|val| val.to_str().ok())
+                    .unwrap_or_default(),
+            );
+
+            let obj = EchoResponse { auth_header, uri };
+            let response = serde_json::to_string(&obj).expect("Could not serialize echo");
+
+            http::Response::builder()
+                .status(200)
+                .body(hyper::body::Body::from(response))
+                .unwrap()
         });
 
         // create real client
         let client = Client::new();
 
+        let url = format!("http://{}/request_path", server.addr());
         // Make request
-        // TODO Reminder you aren't actually making the request yet, you need to
-        // test drive this in
-        // await might actually let the Http server run. Not sure
-        let response = client
-            .request(
-                Url("https://127.0.0.1:8081/request_path"),
-                AuthToken("Bearer irrelevant"),
-            )
-            .await;
+        let response = client.request(Url(&url), AuthToken("irrelevant")).await;
 
         assert!(response.is_ok());
-        let json = response.unwrap().json::<EchoResponse>().await;
-        assert!(json.is_ok());
-        let response = json.unwrap();
 
-        assert_eq!(response.auth_header, String::from("Bearer irrelevant"));
-        assert_eq!(response.body, String::from("request_path"));
-        // How to kill the http server? Will exiting the test take care of it?
+        let json = response?.json::<EchoResponse>().await?;
+        assert_eq!(json.auth_header, String::from("Bearer irrelevant"));
+        assert_eq!(json.uri, String::from("/request_path"));
+
+        Ok(())
     }
 
     // Then the rest is unit tests with headers,
