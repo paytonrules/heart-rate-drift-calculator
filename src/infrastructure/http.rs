@@ -24,6 +24,7 @@ impl Client<NullClient> {
     }
 }
 
+// TODO: Proper error handling
 impl<T: SimpleHttpClient> Client<T> {
     pub async fn request(&self, url: Url<'_>, token: AuthToken<'_>) -> Result<Response, Error> {
         self.http_client
@@ -39,6 +40,7 @@ impl<T: SimpleHttpClient> Client<T> {
 }
 
 // Meant to be used as http::Error
+// Should probably have the response error in it
 #[derive(thiserror::Error, PartialEq, Debug)]
 pub enum Error {
     #[error("Unknown error")]
@@ -67,7 +69,6 @@ struct ReqwestWrapper {
 // I unified this into one API.
 // However because client has the reqwest_builder, and it can be None, this can crash
 // Don't make it public
-// TODO Maybe this can just be the reqwest_builder
 impl SimpleHttpClient for ReqwestWrapper {
     fn new() -> Self {
         Self {
@@ -116,11 +117,11 @@ impl SimpleHttpClient for NullClient {
         Self
     }
 
-    fn get<U: reqwest::IntoUrl>(&self, url: U) -> Self {
+    fn get<U: reqwest::IntoUrl>(&self, _url: U) -> Self {
         *self
     }
 
-    fn header<K, V>(self, key: K, value: V) -> Self
+    fn header<K, V>(self, _key: K, _value: V) -> Self
     where
         http::header::HeaderName: TryFrom<K>,
         <http::header::HeaderName as TryFrom<K>>::Error: Into<http::Error>,
@@ -141,11 +142,10 @@ impl SimpleHttpClient for NullClient {
 mod tests {
     use super::*;
     mod server;
-    use actix_web::{get, web, App, HttpRequest, HttpServer, Responder};
     use serde::{Deserialize, Serialize};
 
     #[tokio::test]
-    async fn null_http_client_returns_empty_response() {
+    async fn null_http_client_returns_empty_response() -> anyhow::Result<()> {
         let client = NullClient::new();
 
         let response = client
@@ -154,7 +154,9 @@ mod tests {
             .send()
             .await;
 
-        assert_eq!(response.unwrap().status(), 200);
+        assert_eq!(response?.status(), 200);
+
+        Ok(())
     }
 
     #[derive(Serialize, Deserialize)]
@@ -162,24 +164,9 @@ mod tests {
         auth_header: String,
         uri: String,
     }
-    /*
-    #[get("/{path}")]
-    async fn index(path: web::Path<String>, req: HttpRequest) -> Result<impl Responder> {
-        println!("Into the path");
-        let body = path.into_inner();
-        let auth_header = String::from(
-            req.headers()
-                .get("Authorization")
-                .and_then(|val| val.to_str().ok())
-                .unwrap_or_default(),
-        );
-        let obj = EchoResponse { auth_header, body };
-        Ok(web::Json(obj))
-    }*/
 
-    #[tokio::test]
-    async fn focused_integration_test_for_client() -> anyhow::Result<()> {
-        let server = server::http(|req| async move {
+    fn start_echo_server() -> server::Server {
+        server::http(|req| async move {
             let uri = req.uri().to_string();
             let auth_header = String::from(
                 req.headers()
@@ -195,13 +182,15 @@ mod tests {
                 .status(200)
                 .body(hyper::body::Body::from(response))
                 .unwrap()
-        });
+        })
+    }
 
-        // create real client
+    #[tokio::test]
+    async fn focused_integration_test_for_client() -> anyhow::Result<()> {
+        let server = start_echo_server();
         let client = Client::new();
-
         let url = format!("http://{}/request_path", server.addr());
-        // Make request
+
         let response = client.request(Url(&url), AuthToken("irrelevant")).await;
 
         assert!(response.is_ok());
@@ -212,8 +201,4 @@ mod tests {
 
         Ok(())
     }
-
-    // Then the rest is unit tests with headers,
-    // then you work back up to the application layer, which is kind of a mess right now (I think mod.rs has a bunch of
-    // duplicate code
 }
