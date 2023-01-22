@@ -1,27 +1,12 @@
 use http::response::Builder;
 use reqwest::Response;
 
+#[derive(Clone, Copy)]
 struct Url<'a>(&'a str);
 struct AuthToken<'a>(&'a str);
 
 struct Client<T: SimpleHttpClient> {
     http_client: T,
-}
-
-impl Client<ReqwestWrapper> {
-    pub fn new() -> Self {
-        Client {
-            http_client: ReqwestWrapper::new(),
-        }
-    }
-}
-
-impl Client<NullClient> {
-    pub fn create_null() -> Client<NullClient> {
-        Client {
-            http_client: NullClient::new(),
-        }
-    }
 }
 
 // TODO: Proper error handling
@@ -36,6 +21,14 @@ impl<T: SimpleHttpClient> Client<T> {
                 println!("err {} {_err}", _err.is_connect());
                 Error::Unknown
             })
+    }
+}
+
+impl Client<ReqwestWrapper> {
+    pub fn new() -> Self {
+        Client {
+            http_client: ReqwestWrapper::new(),
+        }
     }
 }
 
@@ -66,8 +59,8 @@ struct ReqwestWrapper {
 
 // Note - the client can explode! In order to simplify the interface (specifically
 // so I wouldn't have to mimic all the builders in reqwest with APIs and nullables)
-// I unified this into one API.
-// However because client has the reqwest_builder, and it can be None, this can crash
+// I unified this into one API. However because client has the reqwest_builder, and
+// it can be None, this can crash.
 // Don't make it public
 impl SimpleHttpClient for ReqwestWrapper {
     fn new() -> Self {
@@ -138,26 +131,25 @@ impl SimpleHttpClient for NullClient {
     }
 }
 
+impl Client<NullClient> {
+    pub fn create_null() -> Client<NullClient> {
+        Client {
+            http_client: NullClient::new(),
+        }
+    }
+
+    pub fn map_url<T>(self, url: Url, response: http::Response<T>) -> Self {
+        self
+    }
+}
+
+impl NullClient {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     mod server;
     use serde::{Deserialize, Serialize};
-
-    #[tokio::test]
-    async fn null_http_client_returns_empty_response() -> anyhow::Result<()> {
-        let client = NullClient::new();
-
-        let response = client
-            .get("http://ignore")
-            .header("irrelevant", "value")
-            .send()
-            .await;
-
-        assert_eq!(response?.status(), 200);
-
-        Ok(())
-    }
 
     #[derive(Serialize, Deserialize)]
     struct EchoResponse {
@@ -198,6 +190,30 @@ mod tests {
         let json = response?.json::<EchoResponse>().await?;
         assert_eq!(json.auth_header, String::from("Bearer irrelevant"));
         assert_eq!(json.uri, String::from("/request_path"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn null_http_client_returns_empty_response_by_default() -> anyhow::Result<()> {
+        let client = Client::create_null();
+
+        let response = client
+            .request(Url("http://www.example.com"), AuthToken("token"))
+            .await;
+
+        assert_eq!(response?.status(), 200);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn null_client_can_map_url_to_response_body() -> anyhow::Result<()> {
+        let body = http::Response::builder()
+            .status(200)
+            .body(hyper::body::Body::from("oh no"))?;
+
+        let client = Client::create_null().map_url(Url("http://example.com/test"), body);
 
         Ok(())
     }
