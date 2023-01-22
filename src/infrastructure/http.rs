@@ -175,8 +175,8 @@ mod tests {
                     .unwrap_or_default(),
             );
 
-            let obj = EchoResponse { auth_header, uri };
-            let response = serde_json::to_string(&obj).expect("Could not serialize echo");
+            let response = serde_json::to_string(&EchoResponse { auth_header, uri })
+                .expect("Could not serialize echo");
 
             http::Response::builder()
                 .status(200)
