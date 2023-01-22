@@ -160,3 +160,20 @@ Those should have the same resolution - I hope. They did in my first test query 
 min, and you got it.
 */
 
+* TODO
+** TODO TDD NullClient for HTTP
+- It exists but it can't make responses
+** TODO TDD StravaClient with NullClient
+- It's sorta there but has its own null thing going on.
+** TODO TDD StravaClient into app
+** TODO Error handling in the client
+As part of "grow evolutionary seeds" you basically ignored errors.
+That makes sense when you can spend 4-5 hours on a problem, but can be
+problematic in 20 minute increments where it's easy to come back and forget
+what you did. 
+** TODO Add out of result via service (TDD'd)
+** TODO Use heart_rate_drift calculation in app
+** TODO F'ing login
+** TODO Warnings
+** TODO Clippy!
+** TODO Blog?
