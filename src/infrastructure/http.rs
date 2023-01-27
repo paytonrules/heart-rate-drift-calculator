@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use http::response::Builder;
 use reqwest::Response;
 
-#[derive(Clone, Copy)]
-struct Url<'a>(&'a str);
-struct AuthToken<'a>(&'a str);
+#[derive(PartialEq, Eq, Hash, Clone)]
+struct Url(String);
+#[derive(PartialEq, Eq, Hash, Clone)]
+struct AuthToken(String);
 
 struct Client<T: SimpleHttpClient> {
     http_client: T,
@@ -11,7 +14,9 @@ struct Client<T: SimpleHttpClient> {
 
 // TODO: Proper error handling
 impl<T: SimpleHttpClient> Client<T> {
-    pub async fn request(&self, url: Url<'_>, token: AuthToken<'_>) -> Result<Response, Error> {
+    // TODO: Maybe this should not return a reqwest Response object, although
+    // if you're only supposed to use this through Strava it should be okay
+    pub async fn request(&self, url: Url, token: AuthToken) -> Result<Response, Error> {
         self.http_client
             .get(url.0)
             .header("Authorization", format!("Bearer {}", token.0))
@@ -102,16 +107,52 @@ impl SimpleHttpClient for ReqwestWrapper {
     }
 }
 
-#[derive(Copy, Clone)]
-struct NullClient;
+#[derive(Clone)]
+struct NullClient {
+    url: Option<String>,
+    auth_token: Option<String>,
+    request_map: HashMap<Option<AuthToken>, HashMap<Url, String>>,
+}
+
+impl NullClient {
+    pub fn map_url(mut self, url: Url, response: String) -> Self {
+        let mut url_map = self
+            .request_map
+            .get(&None)
+            .unwrap_or(&HashMap::default())
+            .clone();
+        url_map.insert(url, response);
+        self.request_map.insert(None, url_map);
+        self
+    }
+
+    pub fn map_authenticated_url(mut self, token: AuthToken, url: Url, response: String) -> Self {
+        let mut url_map = self
+            .request_map
+            .get(&Some(token.clone()))
+            .unwrap_or(&HashMap::default())
+            .clone();
+        url_map.insert(url, response);
+        self.request_map.insert(Some(token), url_map);
+        self
+    }
+}
 
 impl SimpleHttpClient for NullClient {
     fn new() -> Self {
-        Self
+        Self {
+            url: None,
+            auth_token: None,
+            request_map: HashMap::new(),
+        }
     }
 
-    fn get<U: reqwest::IntoUrl>(&self, _url: U) -> Self {
-        *self
+    fn get<U: reqwest::IntoUrl>(&self, url: U) -> Self {
+        Self {
+            url: Some(url.as_str().to_string()),
+            auth_token: self.auth_token.clone(),
+            request_map: self.request_map.clone(),
+        }
     }
 
     fn header<K, V>(self, _key: K, _value: V) -> Self
@@ -125,7 +166,17 @@ impl SimpleHttpClient for NullClient {
     }
 
     async fn send(self) -> Result<Response, reqwest::Error> {
-        let response = Builder::new().status(200).body("").unwrap();
+        let token = self
+            .auth_token
+            .and_then(|auth_string| Some(AuthToken(auth_string)));
+        let url_map = self.request_map.get(&token);
+
+        let response_body = self
+            .url
+            .and_then(|url_string| url_map?.get(&Url(url_string)).cloned())
+            .unwrap_or("".to_string());
+
+        let response = Builder::new().status(200).body(response_body).unwrap();
 
         async { Ok(reqwest::Response::from(response)) }.await
     }
@@ -138,12 +189,18 @@ impl Client<NullClient> {
         }
     }
 
-    pub fn map_url<T>(self, url: Url, response: http::Response<T>) -> Self {
-        self
+    pub fn map_url(self, url: Url, response: String) -> Self {
+        Self {
+            http_client: self.http_client.map_url(url, response),
+        }
+    }
+
+    pub fn map_authenticated_url(self, token: AuthToken, url: Url, response: String) -> Self {
+        Self {
+            http_client: self.http_client.map_url(url, response),
+        }
     }
 }
-
-impl NullClient {}
 
 #[cfg(test)]
 mod tests {
@@ -183,7 +240,9 @@ mod tests {
         let client = Client::new();
         let url = format!("http://{}/request_path", server.addr());
 
-        let response = client.request(Url(&url), AuthToken("irrelevant")).await;
+        let response = client
+            .request(Url(url.into()), AuthToken("irrelevant".to_owned()))
+            .await;
 
         assert!(response.is_ok());
 
@@ -199,7 +258,10 @@ mod tests {
         let client = Client::create_null();
 
         let response = client
-            .request(Url("http://www.example.com"), AuthToken("token"))
+            .request(
+                Url("http://www.example.com".to_owned()),
+                AuthToken("token".to_owned()),
+            )
             .await;
 
         assert_eq!(response?.status(), 200);
@@ -209,11 +271,40 @@ mod tests {
 
     #[tokio::test]
     async fn null_client_can_map_url_to_response_body() -> anyhow::Result<()> {
-        let body = http::Response::builder()
-            .status(200)
-            .body(hyper::body::Body::from("oh no"))?;
+        let client = Client::create_null().map_url(
+            Url("http://example.com/test".to_owned()),
+            "stored response".to_owned(),
+        );
 
-        let client = Client::create_null().map_url(Url("http://example.com/test"), body);
+        let response = client
+            .request(
+                Url("http://example.com/test".to_owned()),
+                AuthToken("doesnt matter".to_owned()),
+            )
+            .await?;
+
+        assert_eq!(response.text().await?, "stored response");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn null_client_can_create_authenticated_urls() -> anyhow::Result<()> {
+        let token = AuthToken("token".to_owned());
+        let url = Url("http://example.com/test".to_owned());
+        let client = Client::create_null().map_authenticated_url(
+            token.clone(),
+            url.clone(),
+            "stored response".to_owned(),
+        );
+
+        let response = client.request(url.clone(), token.clone()).await?;
+        assert_eq!(response.text().await?, "stored response");
+
+        let incorrect_token = AuthToken("bad liar".to_owned());
+        let response = client.request(url, incorrect_token).await?;
+
+        assert_eq!(response.status(), 401);
 
         Ok(())
     }
