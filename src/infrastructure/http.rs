@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use http::response::Builder;
 use reqwest::Response;
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 struct Url(String);
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 struct AuthToken(String);
 
 struct Client<T: SimpleHttpClient> {
@@ -155,28 +155,60 @@ impl SimpleHttpClient for NullClient {
         }
     }
 
-    fn header<K, V>(self, _key: K, _value: V) -> Self
+    fn header<K, V>(self, key: K, value: V) -> Self
     where
         http::header::HeaderName: TryFrom<K>,
         <http::header::HeaderName as TryFrom<K>>::Error: Into<http::Error>,
         http::header::HeaderValue: TryFrom<V>,
         <http::header::HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
     {
-        self
+        match <http::header::HeaderName as TryFrom<K>>::try_from(key) {
+            Ok(header) => {
+                let inner = header.as_str();
+
+                if inner == "authorization" {
+                    match <http::header::HeaderValue as TryFrom<V>>::try_from(value) {
+                        Ok(value) => {
+                            let token_string = value
+                                .to_str()
+                                .map(|s| s.strip_prefix("Bearer ").unwrap_or_default())
+                                .map(|s| s.to_string())
+                                .ok();
+
+                            Self {
+                                request_map: self.request_map,
+                                auth_token: token_string,
+                                url: self.url,
+                            }
+                        }
+                        Err(_) => self,
+                    }
+                } else {
+                    self
+                }
+            }
+            Err(_) => self,
+        }
     }
 
     async fn send(self) -> Result<Response, reqwest::Error> {
-        let token = self
-            .auth_token
-            .and_then(|auth_string| Some(AuthToken(auth_string)));
-        let url_map = self.request_map.get(&token);
+        let token = self.auth_token.map(AuthToken);
+        let url_map = self
+            .request_map
+            .get(&token)
+            .or(self.request_map.get(&None))
+            .unwrap_or(&HashMap::default())
+            .clone();
 
         let response_body = self
             .url
-            .and_then(|url_string| url_map?.get(&Url(url_string)).cloned())
-            .unwrap_or("".to_string());
+            .and_then(|url_string| url_map.get(&Url(url_string)).cloned());
 
-        let response = Builder::new().status(200).body(response_body).unwrap();
+        let response = if let Some(response_body) = response_body {
+            Builder::new().status(200).body(response_body).unwrap()
+        } else {
+            Builder::new().status(401).body("".to_string()).unwrap()
+        };
 
         async { Ok(reqwest::Response::from(response)) }.await
     }
@@ -197,7 +229,7 @@ impl Client<NullClient> {
 
     pub fn map_authenticated_url(self, token: AuthToken, url: Url, response: String) -> Self {
         Self {
-            http_client: self.http_client.map_url(url, response),
+            http_client: self.http_client.map_authenticated_url(token, url, response),
         }
     }
 }
@@ -254,7 +286,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn null_http_client_returns_empty_response_by_default() -> anyhow::Result<()> {
+    async fn null_http_client_returns_unauthenticated_response_by_default() -> anyhow::Result<()> {
         let client = Client::create_null();
 
         let response = client
@@ -264,13 +296,13 @@ mod tests {
             )
             .await;
 
-        assert_eq!(response?.status(), 200);
+        assert_eq!(response?.status(), 401);
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn null_client_can_map_url_to_response_body() -> anyhow::Result<()> {
+    async fn null_client_can_map_unauthenticated_url_to_response_body() -> anyhow::Result<()> {
         let client = Client::create_null().map_url(
             Url("http://example.com/test".to_owned()),
             "stored response".to_owned(),
@@ -299,6 +331,7 @@ mod tests {
         );
 
         let response = client.request(url.clone(), token.clone()).await?;
+        assert_eq!(response.status(), 200);
         assert_eq!(response.text().await?, "stored response");
 
         let incorrect_token = AuthToken("bad liar".to_owned());
@@ -308,4 +341,7 @@ mod tests {
 
         Ok(())
     }
+
+    // What to do with an unmapped URL?
+    // Can we map multiple URLS to the same token?
 }
