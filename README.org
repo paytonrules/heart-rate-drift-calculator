@@ -163,9 +163,14 @@ min, and you got it.
 * TODO
 ** TODO TDD NullClient for HTTP
 - It exists but it can't make responses
+*** TODO NullClient needs authenticated URLs
+Without this you can't be set it up in the StravaClient correctly
 ** TODO TDD StravaClient with NullClient
-- It's sorta there but has its own null thing going on.
+- It's sorta there but has its own null thing going on. Yank that out,
+  use the client.
+- StravaClient nullable could use map_url or could take data it cares about
 ** TODO TDD StravaClient into app
+- Setup your current 
 ** TODO Error handling in the client
 As part of "grow evolutionary seeds" you basically ignored errors.
 That makes sense when you can spend 4-5 hours on a problem, but can be
