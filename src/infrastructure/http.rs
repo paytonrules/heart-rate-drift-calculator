@@ -17,9 +17,9 @@ struct Client<T: SimpleHttpClient> {
 impl<T: SimpleHttpClient> Client<T> {
     // TODO: Maybe this should not return a reqwest Response object, although
     // if you're only supposed to use this through Strava it should be okay
-    pub async fn request(&self, url: Url, token: AuthToken) -> Result<Response, Error> {
+    pub async fn request(&self, url: &Url, token: &AuthToken) -> Result<Response, Error> {
         self.http_client
-            .get(url.0)
+            .get(&url.0)
             .header("Authorization", format!("Bearer {}", token.0))
             .send()
             .await
@@ -266,7 +266,7 @@ mod tests {
         let url = format!("http://{}/request_path", server.addr());
 
         let response = client
-            .request(Url(url.into()), AuthToken("irrelevant".to_owned()))
+            .request(&Url(url.to_string()), &AuthToken("irrelevant".to_string()))
             .await;
 
         assert!(response.is_ok());
@@ -284,8 +284,8 @@ mod tests {
 
         let response = client
             .request(
-                Url("http://www.example.com".to_owned()),
-                AuthToken("token".to_owned()),
+                &Url("http://www.example.com".to_string()),
+                &AuthToken("token".to_string()),
             )
             .await;
 
@@ -303,8 +303,8 @@ mod tests {
 
         let response = client
             .request(
-                Url("http://example.com/test".to_owned()),
-                AuthToken("doesnt matter".to_owned()),
+                &Url("http://example.com/test".to_string()),
+                &AuthToken("doesnt matter".to_string()),
             )
             .await?;
 
@@ -315,26 +315,40 @@ mod tests {
 
     #[tokio::test]
     async fn null_client_can_create_authenticated_urls() -> anyhow::Result<()> {
-        let token = AuthToken("token".to_owned());
-        let url = Url("http://example.com/test".to_owned());
+        let token = AuthToken("token".to_string());
+        let url = Url("http://example.com/test".to_string());
         let client = Client::create_null().map_authenticated_url(
             token.clone(),
             url.clone(),
-            "stored response".to_owned(),
+            "stored response".to_string(),
         );
 
-        let response = client.request(url.clone(), token.clone()).await?;
+        let response = client.request(&url, &token).await?;
         assert_eq!(response.status(), 200);
         assert_eq!(response.text().await?, "stored response");
 
         let incorrect_token = AuthToken("bad liar".to_owned());
-        let response = client.request(url, incorrect_token).await?;
+        let response = client.request(&url, &incorrect_token).await?;
 
         assert_eq!(response.status(), 401);
 
         Ok(())
     }
 
-    // What to do with an unmapped URL?
+    #[tokio::test]
+    async fn null_client_with_no_mapped_urls() -> anyhow::Result<()> {
+        let response = Client::create_null()
+            .request(
+                &Url("http://example.com".to_string()),
+                &AuthToken("token".to_string()),
+            )
+            .await?;
+
+        assert_eq!(response.status(), 401);
+        assert_eq!(response.text().await?, "");
+
+        Ok(())
+    }
+
     // Can we map multiple URLS to the same token?
 }
