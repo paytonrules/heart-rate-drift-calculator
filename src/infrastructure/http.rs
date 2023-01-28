@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::anyhow;
 use http::response::Builder;
 use reqwest::Response;
 
@@ -162,33 +163,25 @@ impl SimpleHttpClient for NullClient {
         http::header::HeaderValue: TryFrom<V>,
         <http::header::HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
     {
-        match <http::header::HeaderName as TryFrom<K>>::try_from(key) {
-            Ok(header) => {
-                let inner = header.as_str();
-
+        <http::header::HeaderName as TryFrom<K>>::try_from(key)
+            .ok()
+            .map(|h| h.as_str().to_string())
+            .and_then(|inner| {
                 if inner == "authorization" {
-                    match <http::header::HeaderValue as TryFrom<V>>::try_from(value) {
-                        Ok(value) => {
-                            let token_string = value
-                                .to_str()
-                                .map(|s| s.strip_prefix("Bearer ").unwrap_or_default())
-                                .map(|s| s.to_string())
-                                .ok();
-
-                            Self {
-                                request_map: self.request_map,
-                                auth_token: token_string,
-                                url: self.url,
-                            }
-                        }
-                        Err(_) => self,
-                    }
+                    Some(inner)
                 } else {
-                    self
+                    None
                 }
-            }
-            Err(_) => self,
-        }
+            })
+            .and_then(|_inner| <http::header::HeaderValue as TryFrom<V>>::try_from(value).ok())
+            .and_then(|value| value.to_str().map(String::from).ok())
+            .and_then(|s| s.strip_prefix("Bearer ").map(String::from))
+            .map(|auth_token| Self {
+                request_map: self.request_map.clone(),
+                auth_token: Some(auth_token),
+                url: self.url.clone(),
+            })
+            .unwrap_or(self)
     }
 
     async fn send(self) -> Result<Response, reqwest::Error> {
