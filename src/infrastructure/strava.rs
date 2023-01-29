@@ -48,6 +48,7 @@ impl<T: StravaClient> Strava<T> {
     //   - pass in the activity and the token
     // I'll use the integration test to make sure those work, but using a simple server
     //   - See the README for the correct URL and token
+    //   - Just a note but I don't think you need an integration tests anymore
     // Eventually handle errors
     pub async fn get_activity_heart_rate(
         &self,
@@ -135,39 +136,4 @@ mod tests {
         assert_eq!(result.rates, vec![2]);
         assert_eq!(result.times, vec![3]);
     }
-
-    /*
-
-    Upon doing a re-read I should actually use narrow integration tests to test the StravaClient
-    which would naturally be configured with a URL. I should used shared constructor code between
-    nullable...Strava (oh boy that's a bad name) and I should NOT try to test this correctly here.
-
-    That does leave a hole - IMO - I'll still need to test manually that I configured the StravaClient
-    correctly in the 'Strava' object for real data, but it does answer the question of how I handle that
-    problem in a James Shore way.
-
-    (It's possible that Strava and StravaClient and this module do not need to exist, as constructed.
-    Ultimately this is kinda just a function.)
-
-    This doesn't feel 100% right, since it's not a "sociable" test per James definition.
-
-    #[tokio::test]
-    async fn integrated_test_of_client_call() {
-        // Start server
-        let fake_strava_server = HttpServer::new(|| {
-            App::new().route("/api/v3/activities/", web::get().to(authenticate))
-        })
-        .bind("127.0.0.1:8000")
-        .map_err(|_err| HeartRateDriftError::NotEnoughSamples)?
-        .run();
-
-        // Create client - you need to be able to sub in LOCALHOST
-        // But if you have to externally configure the client - then why not just
-        // inject the null version?
-
-        // call method
-
-        // check response
-    }
-    */
 }
