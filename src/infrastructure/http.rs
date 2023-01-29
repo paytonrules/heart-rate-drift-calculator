@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use anyhow::anyhow;
 use http::response::Builder;
 use reqwest::Response;
 
@@ -350,5 +349,27 @@ mod tests {
         Ok(())
     }
 
-    // Can we map multiple URLS to the same token?
+    #[tokio::test]
+    async fn null_client_can_create_multiple_urls_on_the_same_token() -> anyhow::Result<()> {
+        let token = AuthToken("token".to_string());
+        let url1 = Url("http://example.com/test".to_string());
+        let url2 = Url("http://example.com/test2".to_string());
+        let client = Client::create_null()
+            .map_authenticated_url(token.clone(), url1.clone(), "stored response".to_string())
+            .map_authenticated_url(
+                token.clone(),
+                url2.clone(),
+                "stored second response".to_string(),
+            );
+
+        let response = client.request(&url1, &token).await?;
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.text().await?, "stored response");
+
+        let response = client.request(&url2, &token).await?;
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.text().await?, "stored second response");
+
+        Ok(())
+    }
 }
