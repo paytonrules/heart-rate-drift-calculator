@@ -161,23 +161,26 @@ min, and you got it.
 */
 
 * TODO
-** TODO TDD NullClient for HTTP
+** DONE TDD NullClient for HTTP
+CLOSED: [2023-01-29 Sun 12:31]
 - It exists but it can't make responses
 *** TODO NullClient needs authenticated URLs
 Without this you can't be set it up in the StravaClient correctly
 ** TODO TDD StravaClient with NullClient
 - It's sorta there but has its own null thing going on. Yank that out,
   use the client.
-- StravaClient nullable could use map_url or could take data it cares about
+- StravaClient<NullClient> should take specific activities, tokens and responses
 ** TODO TDD StravaClient into app
-- Setup your current 
+- This is the first evolutionary seed, use a service to inject strava client and
+  use it for the output.
+** TODO Use heart_rate_drift calculation in app
+- Use this as part of the domain and 
+** TODO Add out of result via service (TDD'd)
 ** TODO Error handling in the client
 As part of "grow evolutionary seeds" you basically ignored errors.
 That makes sense when you can spend 4-5 hours on a problem, but can be
 problematic in 20 minute increments where it's easy to come back and forget
-what you did. 
-** TODO Add out of result via service (TDD'd)
-** TODO Use heart_rate_drift calculation in app
+what you did. There's a todo in infrastructure/http. There's a couple strava.rs.
 ** TODO F'ing login
 ** TODO Warnings
 ** TODO Clippy!
