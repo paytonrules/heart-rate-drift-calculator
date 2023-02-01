@@ -4,11 +4,11 @@ use http::response::Builder;
 use reqwest::Response;
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-struct Url(String);
+pub struct Url(pub String);
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-struct AuthToken(String);
+pub struct AuthToken(pub String);
 
-struct Client<T: SimpleHttpClient> {
+pub struct Client<T: SimpleHttpClient> {
     http_client: T,
 }
 
@@ -45,7 +45,7 @@ pub enum Error {
     Unknown,
 }
 
-trait SimpleHttpClient {
+pub trait SimpleHttpClient {
     fn new() -> Self;
     fn get<U: reqwest::IntoUrl>(&self, url: U) -> Self;
     fn header<K, V>(self, key: K, value: V) -> Self
@@ -108,7 +108,7 @@ impl SimpleHttpClient for ReqwestWrapper {
 }
 
 #[derive(Clone)]
-struct NullClient {
+pub struct NullClient {
     url: Option<String>,
     auth_token: Option<String>,
     request_map: HashMap<Option<AuthToken>, HashMap<Url, String>>,
