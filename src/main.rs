@@ -63,7 +63,7 @@ async fn main() -> Result<(), HeartRateDriftError> {
         .map_err(|_err| HeartRateDriftError::NotEnoughSamples)?
         .run();
 
-    // Make Request
+    // Construct OAUTH Request
     let client = BasicClient::new(
         ClientId::new(CLIENT_ID.to_string()),
         Some(ClientSecret::new(CLIENT_SECRET.to_string())),
