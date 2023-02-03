@@ -166,7 +166,8 @@ CLOSED: [2023-01-29 Sun 12:31]
 - It exists but it can't make responses
 *** TODO NullClient needs authenticated URLs
 Without this you can't be set it up in the StravaClient correctly
-** TODO TDD StravaClient with NullClient
+** DONE TDD StravaClient with NullClient
+CLOSED: [2023-02-02 Thu 19:12]
 - It's sorta there but has its own null thing going on. Yank that out,
   use the client.
 - StravaClient<NullClient> should take specific activities, tokens and responses
