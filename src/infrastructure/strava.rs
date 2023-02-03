@@ -93,13 +93,13 @@ mod tests {
     #[tokio::test]
     async fn get_activity_heart_rate_converts_empty_arrays() {
         let empty_json = "{
-    \"heartrate\": {
-        \"data\": []
-    },
-    \"time\": {
-        \"data\": []
-    }
-}";
+            \"heartrate\": {
+                \"data\": []
+            },
+            \"time\": {
+                \"data\": []
+            }
+        }";
         let token = AuthToken("token".to_string());
         let activity = ActivityID("activity-id".to_string());
         let strava = Strava::null().with_activity(token.clone(), &activity, empty_json);
@@ -116,13 +116,13 @@ mod tests {
     #[tokio::test]
     async fn get_activity_heart_rate_converts_arrays_with_one_value() {
         let empty_json = "{
-        \"heartrate\": {
-            \"data\": [2]
-        },
-        \"time\": {
-            \"data\": [3]
-        }
-    }";
+            \"heartrate\": {
+                \"data\": [2]
+            },
+            \"time\": {
+                \"data\": [3]
+            }
+        }";
 
         let token = AuthToken("token".to_string());
         let activity = ActivityID("activity-id".to_string());
