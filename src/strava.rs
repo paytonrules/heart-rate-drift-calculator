@@ -6,7 +6,11 @@ use thiserror::Error;
 
 const STRAVA_API: &str = "https://www.strava.com/api/v3/activities";
 
-pub struct ActivityID(String);
+// Format on save
+// Clippy not cargo check
+// Multiple projects same time
+
+pub struct ActivityID(pub String);
 
 #[derive(Deserialize)]
 pub struct Samples {
