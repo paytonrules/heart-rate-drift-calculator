@@ -11,12 +11,12 @@ pub enum HeartRateDriftError {
 }
 
 #[derive(PartialEq, Debug)]
-struct HeartRateAtTime {
+pub struct HeartRateAtTime {
     heart_rate: i16,
     time: i16,
 }
 
-trait HeartRateDrift {
+pub trait HeartRateDrift {
     fn heart_rate_drift(&self) -> Result<f32, HeartRateDriftError>;
 }
 
@@ -49,7 +49,7 @@ impl HeartRateDrift for Vec<HeartRateAtTime> {
     }
 }
 
-fn combine_hr_with_time(heart_rates: &[i16], times: &[i16]) -> Vec<HeartRateAtTime> {
+pub fn combine_hr_with_time(heart_rates: &[i16], times: &[i16]) -> Vec<HeartRateAtTime> {
     heart_rates
         .iter()
         .copied()
