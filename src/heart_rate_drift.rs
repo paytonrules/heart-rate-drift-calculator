@@ -1,8 +1,8 @@
 use thiserror::Error;
 
-const WARM_UP_LIMIT: i16 = 900;
-const FIRST_SEGMENT_LIMIT: i16 = 2700;
-const LAST_SEGMENT_LIMIT: i16 = 4500;
+const WARM_UP_LIMIT: i32 = 900;
+const FIRST_SEGMENT_LIMIT: i32 = 2700;
+const LAST_SEGMENT_LIMIT: i32 = 4500;
 
 #[derive(PartialEq, Error, Debug)]
 pub enum HeartRateDriftError {
@@ -12,23 +12,23 @@ pub enum HeartRateDriftError {
 
 #[derive(PartialEq, Debug)]
 pub struct HeartRateAtTime {
-    heart_rate: i16,
-    time: i16,
+    heart_rate: i32,
+    time: i32,
 }
 
 pub trait HeartRateDrift {
-    fn heart_rate_drift(&self) -> Result<f32, HeartRateDriftError>;
+    fn heart_rate_drift(&self) -> Result<f64, HeartRateDriftError>;
 }
 
 impl HeartRateDrift for Vec<HeartRateAtTime> {
-    fn heart_rate_drift(&self) -> Result<f32, HeartRateDriftError> {
-        let first_segment: Vec<i16> = self
+    fn heart_rate_drift(&self) -> Result<f64, HeartRateDriftError> {
+        let first_segment: Vec<i32> = self
             .iter()
             .filter(|sample| sample.time >= WARM_UP_LIMIT && sample.time < FIRST_SEGMENT_LIMIT)
             .map(|sample| sample.heart_rate)
             .collect();
 
-        let second_segment: Vec<i16> = self
+        let second_segment: Vec<i32> = self
             .iter()
             .filter(|sample| sample.time >= FIRST_SEGMENT_LIMIT && sample.time < LAST_SEGMENT_LIMIT)
             .map(|sample| sample.heart_rate)
@@ -37,10 +37,10 @@ impl HeartRateDrift for Vec<HeartRateAtTime> {
         if first_segment.is_empty() || second_segment.is_empty() {
             Err(HeartRateDriftError::NotEnoughSamples)
         } else {
-            let first_heart_rate_total: f32 = first_segment.iter().sum::<i16>().into();
-            let second_heart_rate_total: f32 = second_segment.iter().sum::<i16>().into();
-            let avg_heart_rate_first = first_heart_rate_total / first_segment.len() as f32;
-            let avg_heart_rate_second = second_heart_rate_total / second_segment.len() as f32;
+            let first_heart_rate_total: f64 = first_segment.iter().sum::<i32>().into();
+            let second_heart_rate_total: f64 = second_segment.iter().sum::<i32>().into();
+            let avg_heart_rate_first = first_heart_rate_total / first_segment.len() as f64;
+            let avg_heart_rate_second = second_heart_rate_total / second_segment.len() as f64;
 
             let drift =
                 ((avg_heart_rate_second - avg_heart_rate_first) / avg_heart_rate_first) * 100.0;
@@ -49,7 +49,7 @@ impl HeartRateDrift for Vec<HeartRateAtTime> {
     }
 }
 
-pub fn combine_hr_with_time(heart_rates: &[i16], times: &[i16]) -> Vec<HeartRateAtTime> {
+pub fn combine_hr_with_time(heart_rates: &[i32], times: &[i32]) -> Vec<HeartRateAtTime> {
     heart_rates
         .iter()
         .copied()

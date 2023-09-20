@@ -17,12 +17,12 @@ struct Args {
 
 #[derive(Debug, Deserialize)]
 struct HeartRates {
-    data: Vec<i16>,
+    data: Vec<i32>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Times {
-    data: Vec<i16>,
+    data: Vec<i32>,
 }
 
 #[derive(Debug, Deserialize)]
