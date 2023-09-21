@@ -1,12 +1,10 @@
 * Heart Rate Drift / Decoupling calculator
 
-This is simple calculator meant to be used with the Stava API for calculating your Heart Rate Drift,
-also known as "decoupling". This is a pretty simple calculation, but is only available with
+This is simple calculator meant to be used with a Stava download for calculating your Heart Rate Drift,
+also known as heart rate decoupling. This is a pretty simple calculation, but is only available with
 Training Peaks premium edition. This had been available on a free website, but I can no longer find it.
 
-** Requirements
-
-This requires the nightly compiler to use the ~async_fn_in_trait~ feature, until that stabilizes.
+I had intended to make this a website, but I got bored with that so a command line app is fine. 
 
 ** Heart Rate Drift Test
 
@@ -22,44 +20,13 @@ The directions to running the test are here: https://uphillathlete.com/aerobic-t
 
 ** Using the app
 
-TBD
+* Download Strava Data
 
-** Architecture
+To get the Strava data you need API access. https://developers.strava.com/docs/getting-started/ has directions, where the key thing
+you'll need to do is create an app and get a client id. Eventually maybe I'll do the work of integrating OAuth with this,
+but I got tired of the hassle of all that so for now it's manual.
 
-This is also my experiment in using the patterns in https://www.jamesshore.com/v2/blog/2018/testing-without-mocks#a-frame-arch
-in order to get more testing, and do better TDD. Over the last few years I've gotten rusty (no pun intended).
-
-To do that I want to spend a little time identifying the various "services" or ports or infrastructure. James's core idea
-is to separate your app into Infrastructure, Logic and Application/UI. So let's make a little diagram to show how it might work:
-
-#+BEGIN_SRC mermaid :file pic.png
-  sequenceDiagram
-    Application->>UI: Parse Command Line Args
-    Application->>Infrastructure: Start Server
-    Application->>Infrastructure: Authenticate
-    Application->>Infrastructure: Fetch Data
-    Application->>Logic: Calculate HR Drift
-    Application->>UI: Print out results 
-#+END_SRC
-
-#+RESULTS:
-[[file:pic.png]]
-
-Some details I haven't figured out, should I use Logic Sandwich or Traffic Cop? Because the
-app needs an authentication token (which is an implementation detail that I don't know that I want)
-a Traffic cop may be better. That way you have access to the server to shut it down.
-
-I'll start at logic sandwich with my first real test, following "Grow Evolutionary Seeds" approach.
-
-** "Focused Integration Tests"
-
-I'll try out the Rust integration testing for this. I've never used it before, so that should be fun. Since I've
-already got actix-web in here, spawning a webserver shouldn't bee too hard (ha!).
-
-* Manually getting responses via Postman/Browser
-
-I keep forgetting how to do this so I'll write it down this time. You have to start
-with the browser. Step one make a browser request with this URL:
+Once you have a client id one make a browser request with this URL:
 
 https://www.strava.com/oauth/authorize?client_id=<CLIENT_ID>&response_type=code&redirect_uri=http://localhost/<DOESNT_REALLY_MATTER>&approval_prompt=force&scope=activity:read
 
@@ -91,98 +58,4 @@ https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&
 
 You need to have the Authorization header with "Bearer <ACCESS_TOKEN>" to get valid data.
 
-* TODOs
-
-Don't expect this to be the accurate, it's more of a double-check list before I call this done.
-
-- Figure out where secrets should go. I'm not sure they need to be hidden from source control.
-- Take the code you got from auth, and make a request to the server for the HR data
-  - Calculate the value
-  - Spit out to browser or command line.
-  - Does that need to be async?
-- Don't just use a hard code path to a run I happened to do in June, take those as command line params
-- Write an actual README
-- Start doing some proper design/TDD on the OAuth interaction part
-- Cleanup all the warnings in the code
-- Exit the server nicely
-- Add some of that PKE and CSRF for forgery and the like
-
-* Comments
-
-Some comments that were in the codebase as I clean things up.
-    // Start server
-    /*
-    // Get code and store it ....somewhere on the redirect ....Arc<RefCell>
-    // Shutdown server
-
-    // Make API call to it to get the info from the given race (via command line)
-    // https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
-
-    // Calculate HR drift and spit it out
-    // combine_hr_with_time().heart_rate_drift();*/
-
-
-    
-/* Example data:
-
-Where you need the activity ID, and you need to make sure your access token (which is in the Auth header)
-Has activity:read_all scope. You might need to switch it from your normal token via the directions here:
-
-https://jessicasalbert.medium.com/holding-your-hand-through-stravas-api-e642d15695f2
-
-That part is unclear.
-
-Query is - https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&key_by_type=true
-Do not forget to add the "Authoriation Bearer <token>" to the header.
-
-You'll get back two streams - HR and time that look like this:
-
-"heartrate": {
-"data": [
-80,
-83,
-89,
-92,
-...]
-
-and
-"time": {
-"data": [
-0,
-2,
-4,
-5,
-7,
-10,
-...]
-
-Those should have the same resolution - I hope. They did in my first test query anyway. So just sync those up, trim the first 15
-min, and you got it.
-*/
-
-* TODO
-** DONE TDD NullClient for HTTP
-CLOSED: [2023-01-29 Sun 12:31]
-- It exists but it can't make responses
-*** TODO NullClient needs authenticated URLs
-Without this you can't be set it up in the StravaClient correctly
-** DONE TDD StravaClient with NullClient
-CLOSED: [2023-02-02 Thu 19:12]
-- It's sorta there but has its own null thing going on. Yank that out,
-  use the client.
-- StravaClient<NullClient> should take specific activities, tokens and responses
-** TODO TDD StravaClient into app
-- This is the first evolutionary seed, use a service to inject strava client and
-  use it for the output.
-** TODO Use heart_rate_drift calculation in app
-- Use this as part of the domain and 
-** TODO Add out of result via service (TDD'd)
-** TODO Error handling in the client
-As part of "grow evolutionary seeds" you basically ignored errors.
-That makes sense when you can spend 4-5 hours on a problem, but can be
-problematic in 20 minute increments where it's easy to come back and forget
-what you did. There's a todo in infrastructure/http. There's a couple strava.rs.
-** TODO F'ing login
-** TODO Warnings
-** TODO Clippy!
-** TODO Blog?
+Now save that response to a file.
