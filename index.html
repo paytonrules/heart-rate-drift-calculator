@@ -4,8 +4,21 @@
 		<title>Heart Rate Drift Calculator</title>
 		<link data-trunk rel="rust" data-target-name="heart_rate_drift_calculator" />
 		<script data-trunk src="test.js"></script>
+		<style>
+		#drop-area {
+		width: 100%;
+		height: 300px;
+		border: 2px dashed #ccc;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		color: #aaa;
+		}
+		</style>
 	</head>
 	<body>
-		<p>The form goes here</p>
+		<div id="drop-area">
+			Drag and drop a JSON file here
+		</div>
 	</body>
 </html>
