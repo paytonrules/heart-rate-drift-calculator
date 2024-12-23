@@ -4,37 +4,29 @@ This is simple calculator meant to be used with a Stava download for calculating
 also known as heart rate decoupling. This is a pretty simple calculation, but is only available with
 Training Peaks premium edition. This had been available on a free website, but I can no longer find it.
 
-I had intended to make this a website, but I got bored with that so a command line app is fine. 
-
 ** Heart Rate Drift Test
 
 The directions to running the test are here: https://uphillathlete.com/aerobic-training/heart-rate-drift/. This is the short version:
-- Run for at least 75 minutes, wearing a HR monitor. 15 minute warm up to get to your predetermined "steady" HR. This should be an easy
-  pace HR. You should not be concerned that you won't complete the run.
+- Run for at least 75 minutes, wearing a HR monitor. 15 minute warm up to get to your predetermined "steady" HR. This should be an easy pace HR. You should not be concerned that you won't complete the run.
 
-- Calculate the difference in average HR from the first 30 minutes (after warm up) to the second 30 minutes. If the second 30 minutes has
-  an average HR of more than 5% higher than your first 30 minutes, then you were running too fast to determine your Aerobic Threshold heart-rate (V1).
-  If the difference is less than 3.5% higher then you were probably too slow. Finding the real spot is tricky.
+- Calculate the difference in average HR from the first 30 minutes (after warm up) to the second 30 minutes. If the second 30 minutes has an average HR of more than 5% higher than your first 30 minutes, then you were running too fast to determine your Aerobic Threshold heart-rate (V1).
 
-  The test is used not to change your HR, but to see if you're going the same speed or faster at that HR over time.
+If the difference is less than 3.5% higher then you were probably too slow. Finding the real spot is tricky. The test is used not to change your HR, but to see if you're going the same speed or faster at that HR over time.
 
 ** Using the app
+For now this is only a command line app. I'm working on a web based version.
 
-* Download Strava Data
+*** Start With Strava Data
 
-To get the Strava data you need API access. https://developers.strava.com/docs/getting-started/ has directions, where the key thing
-you'll need to do is create an app and get a client id. Eventually maybe I'll do the work of integrating OAuth with this,
-but I got tired of the hassle of all that so for now it's manual.
+To get the Strava data you need API access. https://developers.strava.com/docs/getting-started/ has directions, where the key thing you'll need to do is create an app and get a client id. 
 
 Once you have a client id one make a browser request with this URL:
 
 https://www.strava.com/oauth/authorize?client_id=<CLIENT_ID>&response_type=code&redirect_uri=http://localhost/<DOESNT_REALLY_MATTER>&approval_prompt=force&scope=activity:read
 
-Authorize Strava and approve the authorization. This will redirect back to the browser, which will fail (cause
-you aren't running a server). Pull the code off of the redirect url, it's the field ~code~.
+Authorize Strava and approve the authorization. This will redirect back to the browser, which will fail (cause you aren't running a server). Pull the code off of the redirect url, it's the field ~code~.
 
-That's not enough. Now that you have a ~code~ you have to exchange it for an access token. You can do that through Postman. Run a Post request to get the token with something
-like this:
+That's not enough. Now that you have a ~code~ you have to exchange it for an access token. You can do that through Postman. Run a Post request to get the token with something like this:
 
 https://www.strava.com/oauth/token?client_id=<CLIENT_ID>&grant_type=authorization_code&client_secret=<SECRET>&code=<CODE>
 
@@ -58,4 +50,8 @@ https://www.strava.com/api/v3/activities/7944016770/streams?keys=heartrate,time&
 
 You need to have the Authorization header with "Bearer <ACCESS_TOKEN>" to get valid data.
 
-Now save that response to a file.
+Now save that response to a file. This is the file you'll use to run the command line app.
+
+*** Web Based App
+
+The web based app is in progress, and you can get a look at it by using ~trunk serve~. There's a lot of work to be done with it so don't get excited, but if you have previously downloaded your JSON data using the directions above you can drag and drop it onto the web page that is served at ~localhost:8080~ and see the info logged to the console.
