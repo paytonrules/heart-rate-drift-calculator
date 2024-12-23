@@ -58,3 +58,5 @@ flycheck_*.el
 
 # Image generated in readme
 pic.png
+
+dist/
