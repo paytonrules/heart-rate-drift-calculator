@@ -1,20 +1,9 @@
 * Heart Rate Drift / Decoupling calculator
 
-This is simple calculator meant to be used with a Stava download for calculating your Heart Rate Drift,
-also known as heart rate decoupling. This is a pretty simple calculation, but is only available with
-Training Peaks premium edition. This had been available on a free website, but I can no longer find it.
-
-** Heart Rate Drift Test
-
-The directions to running the test are here: https://uphillathlete.com/aerobic-training/heart-rate-drift/. This is the short version:
-- Run for at least 75 minutes, wearing a HR monitor. 15 minute warm up to get to your predetermined "steady" HR. This should be an easy pace HR. You should not be concerned that you won't complete the run.
-
-- Calculate the difference in average HR from the first 30 minutes (after warm up) to the second 30 minutes. If the second 30 minutes has an average HR of more than 5% higher than your first 30 minutes, then you were running too fast to determine your Aerobic Threshold heart-rate (V1).
-
-If the difference is less than 3.5% higher then you were probably too slow. Finding the real spot is tricky. The test is used not to change your HR, but to see if you're going the same speed or faster at that HR over time.
+This is simple calculator meant to be used with a Stava download for calculating your Heart Rate Drift, also known as heart rate decoupling. This is a pretty simple calculation, but is only available with Training Peaks premium edition. This had been available on a free website, but I can no longer find it. So I wrote my own. For details on the test, see the index.html.
 
 ** Using the app
-For now this is only a command line app. I'm working on a web based version.
+Currently this has a command line app but the web based version is in development.
 
 *** Start With Strava Data
 
@@ -52,6 +41,43 @@ You need to have the Authorization header with "Bearer <ACCESS_TOKEN>" to get va
 
 Now save that response to a file. This is the file you'll use to run the command line app.
 
-*** Web Based App
+*** The Web Version
 
-The web based app is in progress, and you can get a look at it by using ~trunk serve~. There's a lot of work to be done with it so don't get excited, but if you have previously downloaded your JSON data using the directions above you can drag and drop it onto the web page that is served at ~localhost:8080~ and see the info logged to the console.
+The web version uses ~trunk~ and can be started with ~trunk serve~. 
+
+This uses Auth0 as it's backend so I didn't have to develop a webserver. A key part of it is that Auth0 needs to be configured with a way to fetch the user profile. That is configured with this:
+
+#+BEGIN_SRC javascript
+function(accessToken, ctx, cb) {
+    const profile = {};
+    
+  	request.get(
+    {
+      url: "https://www.strava.com/api/v3/athlete",
+      headers: {
+        'Authorization': 'Bearer ' + accessToken,
+      }
+    },
+    (err, resp, body) => {
+      if (err) {
+        return cb(err);
+      }
+      if (resp.statusCode !== 200) {
+        return cb(new Error(body));
+      }
+      let bodyParsed;
+      try {
+        bodyParsed = JSON.parse(body);
+      } catch (jsonError) {
+        return cb(new Error(body));
+      }
+      const profile = {
+        user_id: bodyParsed.id
+      };
+      cb(null, profile);
+    }
+  );
+  }
+#+END_SRC
+
+That gets the user id from Strava and allows Auth0 to authenticate.
