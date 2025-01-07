@@ -1,8 +1,34 @@
-addEventListener("TrunkApplicationStarted", (event) => {
+// There is a note in the docs that say 'don't put sensitive data in json' and it runs a server. Don't know why. Isn't the point 
+// I don't need a server? The Reacte directions don't take the extra step.
+const auth_config = {
+  domain: "dev-604lx2uiz5wlztvi.us.auth0.com",
+  clientId: "vJp0kiTALY9aGmnUltrhPFqZ6e5aQufP"
+};
+
+let auth0Client = null;
+
+const login = async () => {
+	if (auth0Client) {
+		auth0Client.loginWithPopup(  { authorizationParams: {}}).catch((result) => {
+			console.log("everybody in the bar gettin' tipsy");
+			console.log(result);
+		});
+	}
+};
+
+addEventListener("TrunkApplicationStarted", async (event) => {
 	console.log("application started - bindings:", window.wasmBindings, "WASM:", event.detail.wasm);
 	window.wasmBindings.greet('World');
 
-	// THIS WAS STRAIGHT COPIED FROM CHATGPTa
+	// Start by authenticating
+	auth0Client = await auth0.createAuth0Client(auth_config);
+
+	const isAuthenticated = await auth0Client.isAuthenticated();
+
+	console.log(isAuthenticated);
+
+
+	// THIS WAS STRAIGHT COPIED FROM CHATGPT
 	// Since I'd prefer to rewrite in Rust, I'm being very quick and dirty
 	const dropArea = document.getElementById('drop-area');
 

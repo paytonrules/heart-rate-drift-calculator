@@ -3,6 +3,7 @@
 	<head>
 		<title>Heart Rate Drift Calculator</title>
 		<link data-trunk rel="rust" data-target-name="heart_rate_drift_calculator" />
+		<script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
 		<script data-trunk src="test.js"></script>
 		<style>
 		#drop-area {
@@ -17,6 +18,9 @@
 		</style>
 	</head>
 	<body>
+		<h2>Heart Rate Drift Calculator</h2>
+		<button id="btn-login" onclick="login()">Connect To Strava</button>
+
 		<div id="drop-area">
 			Drag and drop a JSON file here
 		</div>
