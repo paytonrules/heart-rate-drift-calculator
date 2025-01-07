@@ -60,3 +60,5 @@ flycheck_*.el
 pic.png
 
 dist/
+
+.DS_Store
