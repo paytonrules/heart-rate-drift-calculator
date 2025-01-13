@@ -1,0 +1,7 @@
+[build]
+publish = "dist"
+build = "trunk build"
+
+[dev]
+command = "trunk serve"
+framework = "#static"
