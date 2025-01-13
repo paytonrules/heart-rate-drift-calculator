@@ -9,30 +9,35 @@ let auth0Client = null;
 
 const login = async () => {
 	if (auth0Client) {
-		console.log("My new one");
-		auth0Client.loginWithPopup(  { authorizationParams: {}}).catch((result) => {
-			console.log("everybody in the bar gettin' tipsy");
-			console.log(result);
-		});
+		await auth0Client.loginWithPopup(  { authorizationParams: {}});
 	}
 };
 
 const retrieveJSON = async () => {
-await auth0Client.checkSession();
+	// Get the token
 	const accessToken = await auth0Client.getTokenSilently( { detailedResponse: true });
-	const claims = await auth0Client.getIdTokenClaims();
-	const user = await auth0Client.getUser();
+	// Call Netlify with the Token
+//	const result = await fetch('https://heart-rate-drift.netlify.app/get-strava-activity', {
+	fetch('http://localhost:8888/.netlify/functions/get-strava-activity', {
+		method: 'GET',
+		headers: {
+			'Authorization': `Bearer ${accessToken}`
+		}
+	}).then((data) => {
+			console.log("Data time");
+			console.log(data);
+			data.text().then((text) => { console.log(`text is ${text}`); });
+		});
 
-	debugger;
 	// You will need to make this a button with the field eventually
-  const result = await fetch('https://www.strava.com/api/v3/athlete', {
-    method: 'GET',
-    headers: {
-      'Authorization': auth
-    }
-  });
-  const data = await result.json();
-  console.log(data);
+/*	const result = await fetch('https://www.strava.com/api/v3/athlete', {
+		method: 'GET',
+		headers: {
+			'Authorization': auth
+		}
+	});*/
+//	let json = await result.text();
+//	console.log(json);
 }
 
 addEventListener("TrunkApplicationStarted", async (event) => {

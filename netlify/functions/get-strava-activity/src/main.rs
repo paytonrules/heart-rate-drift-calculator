@@ -21,13 +21,21 @@ async fn main() -> Result<(), Error> {
 pub(crate) async fn my_handler(
     event: LambdaEvent<ApiGatewayProxyRequest>,
 ) -> Result<ApiGatewayProxyResponse, Error> {
-    let path = event.payload.path.unwrap();
+    let token = &event.payload.headers["Authorization"];
 
+    // Here we get the token
+    // We validate it with JSONWebToken (see old stuff)
+    //// I can't remember if we call jkws.js to get the data off here or if we do that next
+    // We call the management API for Auth0 and get user info
+    //// Search it to get the access-token for Strava
+    // Call Strava and finally send response back to client
+    //// We could calculate the drift here but fkuk it let's just use the client side stuff you
+    //// already wrote
     let resp = ApiGatewayProxyResponse {
         status_code: 200,
         headers: HeaderMap::new(),
         multi_value_headers: HeaderMap::new(),
-        body: Some(Body::Text(format!("Hello from '{}'", path))),
+        body: Some(Body::Text(format!("Hello from '{:#?}'", token))),
         is_base64_encoded: false,
     };
 
