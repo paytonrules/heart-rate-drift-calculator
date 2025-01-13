@@ -9,6 +9,7 @@ let auth0Client = null;
 
 const login = async () => {
 	if (auth0Client) {
+		console.log("My new one");
 		auth0Client.loginWithPopup(  { authorizationParams: {}}).catch((result) => {
 			console.log("everybody in the bar gettin' tipsy");
 			console.log(result);
@@ -16,9 +17,26 @@ const login = async () => {
 	}
 };
 
+const retrieveJSON = async () => {
+await auth0Client.checkSession();
+	const accessToken = await auth0Client.getTokenSilently( { detailedResponse: true });
+	const claims = await auth0Client.getIdTokenClaims();
+	const user = await auth0Client.getUser();
+
+	debugger;
+	// You will need to make this a button with the field eventually
+  const result = await fetch('https://www.strava.com/api/v3/athlete', {
+    method: 'GET',
+    headers: {
+      'Authorization': auth
+    }
+  });
+  const data = await result.json();
+  console.log(data);
+}
+
 addEventListener("TrunkApplicationStarted", async (event) => {
 	console.log("application started - bindings:", window.wasmBindings, "WASM:", event.detail.wasm);
-	window.wasmBindings.greet('World');
 
 	// Start by authenticating
 	auth0Client = await auth0.createAuth0Client(auth_config);
