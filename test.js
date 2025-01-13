@@ -1,5 +1,5 @@
 // There is a note in the docs that say 'don't put sensitive data in json' and it runs a server. Don't know why. Isn't the point 
-// I don't need a server? The Reacte directions don't take the extra step.
+// I don't need a server? The React directions don't take the extra step.
 const auth_config = {
   domain: "dev-604lx2uiz5wlztvi.us.auth0.com",
   clientId: "vJp0kiTALY9aGmnUltrhPFqZ6e5aQufP"
