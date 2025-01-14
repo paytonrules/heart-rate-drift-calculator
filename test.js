@@ -1,22 +1,27 @@
-// There is a note in the docs that say 'don't put sensitive data in json' and it runs a server. Don't know why. Isn't the point 
-// I don't need a server? The React directions don't take the extra step.
-const auth_config = {
-  domain: "dev-604lx2uiz5wlztvi.us.auth0.com",
-  clientId: "vJp0kiTALY9aGmnUltrhPFqZ6e5aQufP"
-};
-
-let auth0Client = null;
+const redirectUrl = "http://localhost:8888/.netlify/functions/get-strava-activity";
 
 const login = async () => {
-	if (auth0Client) {
-		await auth0Client.loginWithPopup(  { authorizationParams: {}});
-	}
+	const options = {
+		popup: "yes",
+		top: "auto",
+		left: "auto",
+		toolbar: "no",
+		menubar: "no",
+	};
+	const windowFeatures = "width=380,height=620";
+	window.open(`http://www.strava.com/oauth/authorize?client_id=96911&response_type=code&redirect_uri=${redirectUrl}&approval_prompt=force&scope=activity:read_all`, 
+		"_blank",
+		windowFeatures
+	);
 };
 
 const retrieveJSON = async () => {
 	// Get the token
 	const accessToken = await auth0Client.getTokenSilently( { detailedResponse: true });
-	// Call Netlify with the Token
+	// Call the API with the token.
+	// Per THESE directions: https://auth0.com/docs/authenticate/identity-providers/calling-an-external-idp-api
+	// You need to call an Auth0 API so you can get access to the management API through a token
+	// How the hell does THAT work? 
 //	const result = await fetch('https://heart-rate-drift.netlify.app/get-strava-activity', {
 	fetch('http://localhost:8888/.netlify/functions/get-strava-activity', {
 		method: 'GET',
