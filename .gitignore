@@ -65,3 +65,4 @@ dist/
 
 # Local Netlify folder
 .netlify
+netlify/functions/get-strava-activity/target
