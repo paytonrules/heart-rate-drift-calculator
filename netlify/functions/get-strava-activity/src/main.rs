@@ -96,13 +96,17 @@ pub(crate) async fn redirect_from_strava<T: StravaConnector>(
         .first("code")
         .ok_or("No Code Present")?;
 
+    let strava_response = strava_connection
+        .request_token(&StravaConnectorConfig::default())
+        .await?;
+
     // We have the code and need to exchange it with the access token
     //
     let resp = ApiGatewayProxyResponse {
         status_code: 200,
         headers: HeaderMap::new(),
         multi_value_headers: HeaderMap::new(),
-        body: Some(Body::Text(format!("Hello from Me"))),
+        body: Some(Body::Text(strava_response.text().await?)),
         is_base64_encoded: false,
     };
 
