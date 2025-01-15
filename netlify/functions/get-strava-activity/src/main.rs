@@ -8,7 +8,7 @@ use simple_logger::SimpleLogger;
 
 const CLIENT_ID: &str = "11111";
 const CLIENT_SECRET: &str = "SECRET";
-const STRAVA_TOKEN: &str = "https://www.strava.com/oauth/token";
+const STRAVA_TOKEN_EXCHANGE: &str = "https://www.strava.com/oauth/token";
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -75,10 +75,10 @@ impl StravaConnector for HttpStravaConnector {
         &self,
         connector_config: &StravaConnectorConfig,
     ) -> anyhow::Result<reqwest::Response> {
-        let params = [("", "money")];
+        let params = connector_config.params();
         let client = reqwest::Client::new();
         client
-            .post("https://www.strava.com/oauth/token")
+            .post(&connector_config.uri)
             .form(&params)
             .send()
             .await
@@ -96,12 +96,18 @@ pub(crate) async fn redirect_from_strava<T: StravaConnector>(
         .first("code")
         .ok_or("No Code Present")?;
 
+    // TODO: Ensure the connector config is correct (it isn't now, code, url, etc)
     let strava_response = strava_connection
-        .request_token(&StravaConnectorConfig::default())
+        .request_token(
+            &StravaConnectorConfig::default()
+                .uri(STRAVA_TOKEN_EXCHANGE)
+                .client_id(CLIENT_ID)
+                .code(code),
+        )
         .await?;
 
-    // We have the code and need to exchange it with the access token
-    //
+    // TODO: Make sure the status_code/headers/multi_value_headers all match the original response
+    // (is there a 'from'?
     let resp = ApiGatewayProxyResponse {
         status_code: 200,
         headers: HeaderMap::new(),
@@ -164,12 +170,27 @@ mod tests {
             // This is a stub. It should only work if the expected config is passed into the
             // request (so one with a matching code, client id and client secret (remember thats
             // the whole reason for a back end!))
-            //
-            /*        res: hyper::Response<ResponseBody>,
-            url: Url,
-            accepts: Accepts,
-            total_timeout: Option<Pin<Box<Sleep>>>,
-            read_timeout: Option<Duration>,*/
+            if config.uri != self.config.uri && !self.config.uri.is_empty() {
+                bail!(
+                    "Strava Uri is missing or incorrect. Passed URI: {}",
+                    config.uri
+                );
+            }
+
+            if config.code != self.config.code && !self.config.code.is_empty() {
+                bail!(
+                    "Strava Code is missing or incorrect. Passed Code: {}",
+                    config.code
+                );
+            }
+
+            if config.client_id != self.config.client_id && !self.config.client_id.is_empty() {
+                bail!(
+                    "Strava Client ID is missing or incorrect. Passed Client ID: {}",
+                    config.client_id
+                );
+            }
+
             let response = reqwest::Response::from(http::Response::new(serde_json::to_string(
                 &self.token_response,
             )?));
@@ -179,7 +200,7 @@ mod tests {
 
     fn expected_base_request_config() -> StravaConnectorConfig {
         StravaConnectorConfig::default()
-            .uri(STRAVA_TOKEN)
+            .uri(STRAVA_TOKEN_EXCHANGE)
             .client_id(CLIENT_ID)
             .client_secret(CLIENT_SECRET)
     }
