@@ -1,13 +1,17 @@
-use anyhow::{anyhow, bail, Result};
+use std::env;
+
+use anyhow::Result;
 use aws_lambda_events::encodings::Body;
 use aws_lambda_events::event::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use http::header::HeaderMap;
 use lambda_runtime::{service_fn, Error, LambdaEvent};
+use lambda_runtime_api_client::BoxError;
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
 
-const CLIENT_ID: &str = "11111";
-const CLIENT_SECRET: &str = "SECRET";
+// TODO: Convert these both to environment variables
+const CLIENT_ID_KEY: &str = "STRAVA_CLIENT_ID";
+const CLIENT_SECRET_KEY: &str = "STRAVA_CLIENT_SECRET";
 const STRAVA_TOKEN_EXCHANGE: &str = "https://www.strava.com/oauth/token";
 
 #[tokio::main]
@@ -86,9 +90,20 @@ impl StravaConnector for HttpStravaConnector {
     }
 }
 
-pub(crate) async fn redirect_from_strava<T: StravaConnector>(
+trait Environment {
+    fn get(&self, key: &str) -> anyhow::Result<String> {
+        env::var(key).map_err(anyhow::Error::from)
+    }
+}
+
+struct SystemEnvironment {}
+impl Environment for SystemEnvironment {}
+
+// TODO: Borrow the connection too
+async fn redirect_from_strava<T: StravaConnector, U: Environment>(
     event: LambdaEvent<ApiGatewayProxyRequest>,
     strava_connection: T,
+    environment: &U,
 ) -> std::result::Result<ApiGatewayProxyResponse, Error> {
     let code = event
         .payload
@@ -101,7 +116,8 @@ pub(crate) async fn redirect_from_strava<T: StravaConnector>(
         .request_token(
             &StravaConnectorConfig::default()
                 .uri(STRAVA_TOKEN_EXCHANGE)
-                .client_id(CLIENT_ID)
+                .client_id(&environment.get(CLIENT_ID_KEY).map_err(BoxError::from)?)
+                .client_secret(&environment.get(CLIENT_SECRET_KEY).map_err(BoxError::from)?)
                 .code(code),
         )
         .await?;
@@ -122,11 +138,12 @@ pub(crate) async fn redirect_from_strava<T: StravaConnector>(
 pub(crate) async fn default_redirect(
     event: LambdaEvent<ApiGatewayProxyRequest>,
 ) -> Result<ApiGatewayProxyResponse, Error> {
-    redirect_from_strava(event, HttpStravaConnector {}).await
+    redirect_from_strava(event, HttpStravaConnector {}, &SystemEnvironment {}).await
 }
 
 #[cfg(test)]
 mod tests {
+    use anyhow::{anyhow, bail};
     use aws_lambda_events::query_map::QueryMap;
     use lambda_runtime::Context;
     use lambda_runtime_api_client::BoxError;
@@ -136,6 +153,8 @@ mod tests {
     use super::*;
 
     const THE_TEST_TOKEN: &str = "The Test Token";
+    const CLIENT_SECRET: &str = "ClientSecret";
+    const CLIENT_ID: &str = "11111";
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
     struct StravaTokenResponse {
@@ -191,10 +210,46 @@ mod tests {
                 );
             }
 
+            if config.client_secret != self.config.client_secret
+                && !self.config.client_secret.is_empty()
+            {
+                bail!(
+                    "Strava Client Secret is missing or incorrect. Passed Client Secret: {}",
+                    config.client_secret
+                );
+            }
+
             let response = reqwest::Response::from(http::Response::new(serde_json::to_string(
                 &self.token_response,
             )?));
             Ok(response)
+        }
+    }
+
+    #[derive(Default)]
+    struct MockEnvironment {
+        environment_map: std::collections::HashMap<String, String>,
+    }
+
+    impl MockEnvironment {
+        fn with_client_secrets() -> Self {
+            let mut environment = MockEnvironment::default();
+            environment
+                .environment_map
+                .insert(CLIENT_ID_KEY.to_string(), CLIENT_ID.to_string());
+            environment
+                .environment_map
+                .insert(CLIENT_SECRET_KEY.to_string(), CLIENT_SECRET.to_string());
+            environment
+        }
+    }
+
+    impl Environment for MockEnvironment {
+        fn get(&self, key: &str) -> anyhow::Result<String> {
+            self.environment_map
+                .get(&String::from(key))
+                .cloned()
+                .ok_or(anyhow!("Ooops"))
         }
     }
 
@@ -228,10 +283,11 @@ mod tests {
         )
         .and_token_response(THE_TEST_TOKEN.into());
 
-        let raw_response_body = redirect_from_strava(event, connector)
-            .await?
-            .body
-            .ok_or("Body is not present")?;
+        let raw_response_body =
+            redirect_from_strava(event, connector, &MockEnvironment::with_client_secrets())
+                .await?
+                .body
+                .ok_or("Body is not present")?;
 
         let actual_response_body: StravaTokenResponse =
             serde_json::from_slice(&raw_response_body).unwrap();
@@ -251,11 +307,14 @@ mod tests {
 
         assert!(redirect_from_strava(
             event,
-            MockStravaConnector::with_expected_config(&expected_base_request_config())
+            MockStravaConnector::with_expected_config(&expected_base_request_config()),
+            &MockEnvironment::with_client_secrets()
         )
         .await
         .is_err());
     }
+
+    // TODO: Test what happens when environment variables are missing
 
     #[test]
     fn test_strava_connector_returns_params_as_reqwest_params() {
