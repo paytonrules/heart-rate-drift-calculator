@@ -451,6 +451,7 @@ dependencies = [
  "http",
  "hyper-util",
  "lambda_runtime",
+ "lambda_runtime_api_client",
  "log",
  "reqwest",
  "serde",

@@ -123,6 +123,7 @@ pub(crate) async fn default_redirect(
 mod tests {
     use aws_lambda_events::query_map::QueryMap;
     use lambda_runtime::Context;
+    use lambda_runtime_api_client::BoxError;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
 
@@ -183,28 +184,33 @@ mod tests {
             .client_secret(CLIENT_SECRET)
     }
 
-    #[tokio::test]
-    async fn test_proper_redirect_with_code_returns_access_token_from_post() {
-        let expected_code = "12345";
+    fn create_redirect_event_with_code(code: &str) -> LambdaEvent<ApiGatewayProxyRequest> {
         let mut query_string = HashMap::new();
-        query_string.insert("code".into(), vec![expected_code.into()]);
+        query_string.insert("code".into(), vec![code.into()]);
         let query_string_parameters = QueryMap::from(query_string);
         let payload = ApiGatewayProxyRequest {
             query_string_parameters,
             ..Default::default()
         };
 
-        let context = Context::default();
-        let event = LambdaEvent::new(payload, context);
+        LambdaEvent::new(payload, Context::default())
+    }
 
-        let connector = MockStravaConnector::with_expected_config(&expected_base_request_config())
-            .and_token_response(THE_TEST_TOKEN.into());
+    #[tokio::test]
+    async fn test_proper_redirect_with_code_returns_access_token_from_post() -> Result<(), BoxError>
+    {
+        const RESPONSE_CODE: &str = "12345";
+        let event = create_redirect_event_with_code(RESPONSE_CODE);
+
+        let connector = MockStravaConnector::with_expected_config(
+            &expected_base_request_config().code(RESPONSE_CODE),
+        )
+        .and_token_response(THE_TEST_TOKEN.into());
 
         let raw_response_body = redirect_from_strava(event, connector)
-            .await
-            .unwrap()
+            .await?
             .body
-            .unwrap();
+            .ok_or("Body is not present")?;
 
         let actual_response_body: StravaTokenResponse =
             serde_json::from_slice(&raw_response_body).unwrap();
@@ -213,6 +219,7 @@ mod tests {
             access_token: THE_TEST_TOKEN.to_string(),
         };
         assert_eq!(actual_response_body, expected_response_body);
+        Ok(())
     }
 
     #[tokio::test]
