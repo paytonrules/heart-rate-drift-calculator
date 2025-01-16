@@ -10,7 +10,6 @@ use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 
-// TODO: Convert these both to environment variables
 const CLIENT_ID_KEY: &str = "STRAVA_CLIENT_ID";
 const CLIENT_SECRET_KEY: &str = "STRAVA_CLIENT_SECRET";
 const STRAVA_TOKEN_EXCHANGE: &str = "https://www.strava.com/oauth/token";
@@ -105,10 +104,9 @@ trait Environment {
 struct SystemEnvironment {}
 impl Environment for SystemEnvironment {}
 
-// TODO: Borrow the connection too
 async fn redirect_from_strava<T: StravaConnector, U: Environment>(
     event: LambdaEvent<ApiGatewayProxyRequest>,
-    strava_connection: T,
+    strava_connection: &T,
     environment: &U,
 ) -> std::result::Result<ApiGatewayProxyResponse, Error> {
     let code = event
@@ -145,7 +143,7 @@ async fn redirect_from_strava<T: StravaConnector, U: Environment>(
 pub(crate) async fn default_redirect(
     event: LambdaEvent<ApiGatewayProxyRequest>,
 ) -> Result<ApiGatewayProxyResponse, Error> {
-    redirect_from_strava(event, HttpStravaConnector {}, &SystemEnvironment {}).await
+    redirect_from_strava(event, &HttpStravaConnector {}, &SystemEnvironment {}).await
 }
 
 #[cfg(test)]
@@ -288,7 +286,7 @@ mod tests {
 
         // Act - call the redirect
         let actual_response_body =
-            &redirect_from_strava(event, connector, &MockEnvironment::with_client_secrets())
+            &redirect_from_strava(event, &connector, &MockEnvironment::with_client_secrets())
                 .await?
                 .body
                 .ok_or("Body is not present")?;
@@ -310,7 +308,7 @@ mod tests {
 
         assert!(redirect_from_strava(
             event,
-            MockStravaConnector::with_expected_config(&expected_base_request_config()),
+            &MockStravaConnector::with_expected_config(&expected_base_request_config()),
             &MockEnvironment::with_client_secrets()
         )
         .await
