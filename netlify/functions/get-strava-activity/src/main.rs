@@ -366,8 +366,6 @@ mod tests {
         Ok(())
     }
 
-    // TODO: Test what happens when environment variables are missing
-
     #[test]
     fn test_strava_connector_returns_params_as_reqwest_params() {
         let config = StravaConnectorConfig::default()
