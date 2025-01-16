@@ -125,15 +125,19 @@ async fn redirect_from_strava<T: StravaConnector, U: Environment>(
         )
         .await?;
 
-    let token: StravaTokenResponse = serde_json::from_str(&strava_response.text().await?)?;
+    let status_code = strava_response.status().as_u16() as i64;
+    let access_token = if strava_response.status().is_success() {
+        let token: StravaTokenResponse = serde_json::from_str(&strava_response.text().await?)?;
+        Some(token.access_token)
+    } else {
+        None
+    };
 
-    // TODO: Make sure the status_code/headers/multi_value_headers all match the original response
-    // (is there a 'from'?
     let resp = ApiGatewayProxyResponse {
-        status_code: 200,
+        status_code,
         headers: HeaderMap::new(),
         multi_value_headers: HeaderMap::new(),
-        body: Some(Body::Text(token.access_token)),
+        body: Some(Body::Text(access_token.unwrap_or_default())),
         is_base64_encoded: false,
     };
 
@@ -150,6 +154,7 @@ pub(crate) async fn default_redirect(
 mod tests {
     use anyhow::{anyhow, bail};
     use aws_lambda_events::query_map::QueryMap;
+    use http::response::Builder;
     use lambda_runtime::Context;
     use lambda_runtime_api_client::BoxError;
     use std::collections::HashMap;
@@ -159,16 +164,33 @@ mod tests {
     const CLIENT_SECRET: &str = "ClientSecret";
     const CLIENT_ID: &str = "11111";
 
-    #[derive(Default)]
     struct MockStravaConnector {
+        code: u16,
         config: StravaConnectorConfig,
         token_response: StravaTokenResponse,
     }
 
+    impl Default for MockStravaConnector {
+        fn default() -> Self {
+            Self {
+                code: 200,
+                config: StravaConnectorConfig::default(),
+                token_response: StravaTokenResponse::default(),
+            }
+        }
+    }
+
     impl MockStravaConnector {
         fn with_expected_config(config: &StravaConnectorConfig) -> Self {
-            MockStravaConnector {
+            Self {
                 config: config.clone(),
+                ..Default::default()
+            }
+        }
+
+        fn with_error_code(code: u16) -> Self {
+            Self {
+                code,
                 ..Default::default()
             }
         }
@@ -184,6 +206,21 @@ mod tests {
             &self,
             config: &StravaConnectorConfig,
         ) -> anyhow::Result<reqwest::Response> {
+            // Short circuit - doesn't matter what's in the request if the code is not 200
+            // The default code is 200 so anything that is successful must pass the other checks as
+            // well
+            if self.code != 200 {
+                //                let url = Url::parse("http://example.com").unwrap();
+                let response = Builder::new()
+                    .status(self.code)
+                    //                   .url(url.clone())
+                    .body("")
+                    .unwrap();
+                let response = reqwest::Response::from(response);
+
+                return Ok(response);
+            }
+
             // This is a stub. It should only work if the expected config is passed into the
             // request (so one with a matching code, client id and client secret (remember thats
             // the whole reason for a back end!))
@@ -231,7 +268,7 @@ mod tests {
 
     impl MockEnvironment {
         fn with_client_secrets() -> Self {
-            let mut environment = MockEnvironment::default();
+            let mut environment = Self::default();
             environment
                 .environment_map
                 .insert(CLIENT_ID_KEY.to_string(), CLIENT_ID.to_string());
@@ -313,6 +350,20 @@ mod tests {
         )
         .await
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn test_non_successful_status_code_from_strava_connector() -> Result<(), BoxError> {
+        let connector = MockStravaConnector::with_error_code(500);
+        let event = create_redirect_event_with_code("validcode");
+
+        let response =
+            redirect_from_strava(event, &connector, &MockEnvironment::with_client_secrets())
+                .await?;
+
+        assert_eq!(response.status_code, 500);
+
+        Ok(())
     }
 
     // TODO: Test what happens when environment variables are missing
