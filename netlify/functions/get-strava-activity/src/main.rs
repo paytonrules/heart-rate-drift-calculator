@@ -111,7 +111,6 @@ async fn redirect_from_strava<T: StravaConnector, U: Environment>(
         .first("code")
         .ok_or("No Code Present")?;
 
-    // TODO: Ensure the connector config is correct (it isn't now, code, url, etc)
     let strava_response = strava_connection
         .request_token(
             &StravaConnectorConfig::default()
@@ -278,23 +277,26 @@ mod tests {
         const RESPONSE_CODE: &str = "12345";
         let event = create_redirect_event_with_code(RESPONSE_CODE);
 
+        // The connector is configured with the expected url, client_id, client_secret
+        // and expected RESPONSE_CODE. It will error if the connctor is called incorrectly
         let connector = MockStravaConnector::with_expected_config(
             &expected_base_request_config().code(RESPONSE_CODE),
         )
         .and_token_response(THE_TEST_TOKEN.into());
 
+        // Act - call the redirect
         let raw_response_body =
             redirect_from_strava(event, connector, &MockEnvironment::with_client_secrets())
                 .await?
                 .body
                 .ok_or("Body is not present")?;
 
-        let actual_response_body: StravaTokenResponse =
-            serde_json::from_slice(&raw_response_body).unwrap();
+        let actual_response_body: StravaTokenResponse = serde_json::from_slice(&raw_response_body)?;
 
         let expected_response_body = StravaTokenResponse {
             access_token: THE_TEST_TOKEN.to_string(),
         };
+        // Make sure the response body is correct
         assert_eq!(actual_response_body, expected_response_body);
         Ok(())
     }
