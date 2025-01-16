@@ -7,6 +7,7 @@ use http::header::HeaderMap;
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use lambda_runtime_api_client::BoxError;
 use log::LevelFilter;
+use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 
 // TODO: Convert these both to environment variables
@@ -25,6 +26,11 @@ async fn main() -> Result<(), Error> {
     let func = service_fn(default_redirect);
     lambda_runtime::run(func).await?;
     Ok(())
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+struct StravaTokenResponse {
+    access_token: String,
 }
 
 #[derive(Default, Clone)]
@@ -121,13 +127,15 @@ async fn redirect_from_strava<T: StravaConnector, U: Environment>(
         )
         .await?;
 
+    let token: StravaTokenResponse = serde_json::from_str(&strava_response.text().await?)?;
+
     // TODO: Make sure the status_code/headers/multi_value_headers all match the original response
     // (is there a 'from'?
     let resp = ApiGatewayProxyResponse {
         status_code: 200,
         headers: HeaderMap::new(),
         multi_value_headers: HeaderMap::new(),
-        body: Some(Body::Text(strava_response.text().await?)),
+        body: Some(Body::Text(token.access_token)),
         is_base64_encoded: false,
     };
 
@@ -146,19 +154,12 @@ mod tests {
     use aws_lambda_events::query_map::QueryMap;
     use lambda_runtime::Context;
     use lambda_runtime_api_client::BoxError;
-    use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
 
     use super::*;
 
-    const THE_TEST_TOKEN: &str = "The Test Token";
     const CLIENT_SECRET: &str = "ClientSecret";
     const CLIENT_ID: &str = "11111";
-
-    #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
-    struct StravaTokenResponse {
-        access_token: String,
-    }
 
     #[derive(Default)]
     struct MockStravaConnector {
@@ -274,6 +275,7 @@ mod tests {
     #[tokio::test]
     async fn test_proper_redirect_with_code_returns_access_token_from_post() -> Result<(), BoxError>
     {
+        const THE_TEST_TOKEN: &str = "The Test Token";
         const RESPONSE_CODE: &str = "12345";
         let event = create_redirect_event_with_code(RESPONSE_CODE);
 
@@ -285,19 +287,18 @@ mod tests {
         .and_token_response(THE_TEST_TOKEN.into());
 
         // Act - call the redirect
-        let raw_response_body =
-            redirect_from_strava(event, connector, &MockEnvironment::with_client_secrets())
+        let actual_response_body =
+            &redirect_from_strava(event, connector, &MockEnvironment::with_client_secrets())
                 .await?
                 .body
                 .ok_or("Body is not present")?;
 
-        let actual_response_body: StravaTokenResponse = serde_json::from_slice(&raw_response_body)?;
-
-        let expected_response_body = StravaTokenResponse {
-            access_token: THE_TEST_TOKEN.to_string(),
+        // assert!(matches! should work here, or maybe assert_matches!
+        match actual_response_body {
+            Body::Text(body_text) => assert_eq!(body_text, THE_TEST_TOKEN),
+            _ => panic!("The response body of the redirect was not text"),
         };
-        // Make sure the response body is correct
-        assert_eq!(actual_response_body, expected_response_body);
+
         Ok(())
     }
 
