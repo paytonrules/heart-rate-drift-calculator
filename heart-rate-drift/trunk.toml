@@ -1,3 +1,2 @@
 [watch]
 # Paths to ignore.
-ignore = ["netlify", ".netlify"]

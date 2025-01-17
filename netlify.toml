@@ -1,7 +1,11 @@
 [build]
-publish = "dist"
-build = "trunk build"
+base = "heart-rate-drift/"
+publish = "heart-rate-drift/dist/"
+command = "trunk build"
 
 [dev]
-command = "trunk serve"
+command = "trunk serve --config ./heart-rate-drift/trunk.toml"
 framework = "#static"
+
+[functions]
+directory = "netlify/functions"
