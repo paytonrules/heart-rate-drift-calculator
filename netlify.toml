@@ -1,7 +1,7 @@
 [build]
-base = "heart-rate-drift/"
+# base = "heart-rate-drift/"
 publish = "heart-rate-drift/dist/"
-command = "trunk build"
+command = "trunk build --config ./heart-rate-drift/trunk.toml"
 # functions = "netlify/functions"
 
 # [ context.production.environment]
