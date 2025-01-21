@@ -2,10 +2,12 @@
 base = "heart-rate-drift/"
 publish = "heart-rate-drift/dist/"
 command = "trunk build"
+# functions = "netlify/functions"
+
+# [ context.production.environment]
+# NETLIFY_EXPERIMENTAL_BUILD_RUST_SOURCE = "true"
 
 [dev]
 command = "trunk serve --config ./heart-rate-drift/trunk.toml"
 framework = "#static"
 
-[functions]
-directory = "netlify/functions"
