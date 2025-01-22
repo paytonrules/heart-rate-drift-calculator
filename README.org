@@ -1,5 +1,9 @@
-* Heart Rate Drift / Decoupling calculator
+**NOTE** Sometimes you have to list the environment variables for netlify dev to see the functions.
 
+- If the Rust functions don't build on netlify dev (or don't auto build on change) or you can't validate via strava, try running ~netlify env:list~ to load up the netlify environment variables including
+enabling Rust.
+
+* Heart Rate Drift / Decoupling calculator
 This is simple calculator meant to be used with a Stava download for calculating your Heart Rate Drift, also known as heart rate decoupling. This is a pretty simple calculation, but is only available with Training Peaks premium edition. This had been available on a free website, but I can no longer find it. So I wrote my own. For details on the test, see the index.html.
 
 ** Using the app
@@ -81,3 +85,15 @@ function(accessToken, ctx, cb) {
 #+END_SRC
 
 That gets the user id from Strava and allows Auth0 to authenticate.
+
+** Netlify Deployment
+
+After much experimentation it appears I can get this all to work via GitHub + Netlify and Netlify functions. The architecture (which is way more complicated than I'd like but cest la vie) is:
+- Source on GitHub, GitHub actions deploy to Netlify.
+- Initial authentication goes through Auth0 and uses OAuth
+- If authentication succeeds we call the Auth0 API, which proxies to a Netlify function with the full ID Token
+- After validating the token the Netlify function calls a function to get the full user data
+- Assuming a strava access-token is present, it calls the Strava API with that token and returns the value
+- At this point you could move out of using WebAssembly and just put this on the server, but I'd rather not. 
+
+
