@@ -1,0 +1,12 @@
+[package]
+name = "strava-oauth-exchange"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lambda_http = "0.14.0"
+
+[dev-dependencies]
+wiremock  = "^0.6"
+
+tokio = { version = "1", features = ["macros"] }
