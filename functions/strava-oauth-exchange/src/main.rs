@@ -1,4 +1,6 @@
 use lambda_http::{run, service_fn, tracing, Error};
+use tokio;
+
 mod http_handler;
 use http_handler::parse_redirect_from_strava;
 
