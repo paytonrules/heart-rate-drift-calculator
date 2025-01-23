@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-	"heart-rate-drift",
-	"netlify/functions/get-strava-activity"
+	"web",
+	"functions/strava-oauth-exchange"
 ]
