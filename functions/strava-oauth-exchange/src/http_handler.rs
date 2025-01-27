@@ -1,6 +1,13 @@
 use lambda_http::{Error, Request, RequestExt, Response};
 use std::env;
 
+const OAUTH_TOKEN_PATH: &str = "/oauth/token";
+const CODE_QUERY_PARAM_NAME: &str = "code";
+const CLIENT_ID_QUERY_PARAM_NAME: &str = "client_id";
+const CLIENT_SECRET_QUERY_PARAM_NAME: &str = "client_secret";
+
+// TODO: There is a bit of a mix and match here as you've got 'strava' specific code here,
+// but also generic code here. I'm essentially undecided - should everyting strava be in main?
 const CLIENT_ID_KEY: &str = "STRAVA_CLIENT";
 const CLIENT_SECRET_KEY: &str = "STRAVA_CLIENT_SECRET";
 
@@ -25,26 +32,26 @@ pub(crate) async fn parse_redirect_from_strava<T: SecretService>(
     secret_service: &T,
 ) -> Result<Response<String>, Error> {
     // Get the code from the event
-    // TODO: unwrap_or may not be ideal
+    // TODO: unwrap_or should probably be replaced with a result
     let code = event
         .query_string_parameters_ref()
-        .and_then(|params| params.first("code"))
+        .and_then(|params| params.first(CODE_QUERY_PARAM_NAME))
         .unwrap_or("");
 
     let client = reqwest::Client::new();
-    let path = format!("{}{}", url, "/oauth/token");
+    let path = format!("{}{}", url, OAUTH_TOKEN_PATH);
 
     // TODO: unwrap_or_default will work but confusing.
     let token_exchange = client
         .post(path)
         .form(&[
-            ("code", code),
+            (CODE_QUERY_PARAM_NAME, code),
             (
-                "client_id",
+                CLIENT_ID_QUERY_PARAM_NAME,
                 &secret_service.get(CLIENT_ID_KEY).unwrap_or_default(),
             ),
             (
-                "client_secret",
+                CLIENT_SECRET_QUERY_PARAM_NAME,
                 &secret_service.get(CLIENT_SECRET_KEY).unwrap_or_default(),
             ),
         ])
@@ -106,25 +113,27 @@ mod tests {
         const OAUTH_CODE: &str = "12345";
 
         let query_string: HashMap<String, String> =
-            HashMap::from([(String::from("code"), OAUTH_CODE.to_string())]);
+            HashMap::from([(CODE_QUERY_PARAM_NAME.to_string(), OAUTH_CODE.to_string())]);
         let request = Request::default().with_query_string_parameters(query_string);
 
-        // Finally prepare a mock server expecting the oauth/token request with the code
-        // from the original request and the client id and secret key
+        // Finally prepare a mock server expecting the oauth/token request with the
+        // code, client id and client secret
+        // If done right it will return the test token
         const THE_TEST_TOKEN: &str = "The Test Token";
         let mock_server = MockServer::start().await;
-        // TODO: URI should be passed in
-        // TODO: Make hard coded strings here (uri, query params) constants
         Mock::given(method("POST"))
-            .and(path("/oauth/token"))
-            .and(body_string_contains(format!("code={}", OAUTH_CODE)))
+            .and(path(OAUTH_TOKEN_PATH))
             .and(body_string_contains(format!(
-                "client_id={}",
-                TEST_CLIENT_ID
+                "{}={}",
+                CODE_QUERY_PARAM_NAME, OAUTH_CODE
             )))
             .and(body_string_contains(format!(
-                "client_secret={}",
-                TEST_CLIENT_SECRET
+                "{}={}",
+                CLIENT_ID_QUERY_PARAM_NAME, TEST_CLIENT_ID
+            )))
+            .and(body_string_contains(format!(
+                "{}={}",
+                CLIENT_SECRET_QUERY_PARAM_NAME, TEST_CLIENT_SECRET
             )))
             .respond_with(ResponseTemplate::new(200).set_body_string(THE_TEST_TOKEN))
             .mount(&mock_server)
@@ -137,8 +146,6 @@ mod tests {
                 .unwrap();
 
         let body_string = actual_response.body();
-        let requests = mock_server.received_requests().await;
-        println!("The requests {:#?}", requests);
         assert_eq!(body_string, THE_TEST_TOKEN);
     }
 }
