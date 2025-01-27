@@ -1,13 +1,60 @@
-**NOTE** Sometimes you have to list the environment variables for netlify dev to see the functions.
-
-- If the Rust functions don't build on netlify dev (or don't auto build on change) or you can't validate via strava, try running ~netlify env:list~ to load up the netlify environment variables including
-enabling Rust.
-
 * Heart Rate Drift / Decoupling calculator
-This is simple calculator meant to be used with a Stava download for calculating your Heart Rate Drift, also known as heart rate decoupling. This is a pretty simple calculation, but is only available with Training Peaks premium edition. This had been available on a free website, but I can no longer find it. So I wrote my own. For details on the test, see the index.html.
+This is simple calculator meant to be used with Stava for calculating your Heart Rate Drift, also known as heart rate decoupling. This is a pretty simple calculation, but is only available with Training Peaks premium edition. This had been available on a free website, but I can no longer find it. For details on the actual running test, see https://uphillathlete.com/aerobic-training/heart-rate-drift/.
 
-** Using the app
-Currently this has a command line app but the web based version is in development.
+** Application Structure
+The app is made up of two (arguably three) parts. The first is a web app written in Rust and compiled to WebAssembly that is managed using ~trunk~, which needs to be installed to run the web version. That can be found at https://trunkrs.dev/, and that part of the application is in the ~web~ directory. That web directory also contains a ~main.rs~ which runs a command-line version of the app, which I may or may not maintain going forward. The web app is deployed to Netlify.
+
+The other part is a lambda function at ~functions/strava-oauth-exchange~. As you may have guessed this not directly related to actually calculating the HR drift. It exists to handle the OAuth handshake with Strava. The flow works like this:
+
+#+BEGIN_SRC mermaid :file strava-diagram.png
+  sequenceDiagram
+      Web->>Strava: Call Strava via traditional web button
+      Strava->>Lambda: Call Lambda with code via "redirect-url"
+      Lambda->>Strava: Exchange the code for a token by also passing the CLIENT_ID and the CLIENT_SECRET
+      Lambda->>Web: Return Access token
+#+END_SRC
+
+#+RESULTS:
+[[file:strava-diagram.png]]
+
+Once the web app has the access token it can interact directly with Strava to get activity information for the authorized user. This means that the lambda function needs to have all the secrets injected into it via environment variables, and that deploying it requires having an aws user configured. Building and deploying the lambda function is done using ~cargo lambda~ which also needs to be installed: https://www.cargo-lambda.info/guide/what-is-cargo-lambda.html.
+
+*** AWS Setup
+The deployment of the function at ~functions/strava-oauth-exchange~ is done by calling ~cargo lambda deploy strava-oauth-exchange --enable-function-url~ from that directory. To deploy from your local machine it requires a user to be setup in AWS lambda with proper permissions and for that user to be configured on that machine. This may change to use iam roles.
+
+To start then create an iAM user from your root account on aws (and create a root account if you don't have one). Then use ~aws configure~ to setup credentials matching that user. I did this through the AWS console on line and then via the command line app ~aws cli~. *NOTE* Installing ~aws cli~ via homebrew my install a version of Rust with homebrew, which can conflict with rustups version. If that happens uninstall Rust and any tools that depend on Rust in homebrew.
+
+After using ~aws configure~ to setup credentials matching that user, and you need to make sure the user is setup correctly. It needs to have:
+
+#+BEGIN_SRC
+AWSLambda_FullAccess
+AWSLambdaBasicExecutionRole
+AWSLambdaRole
+#+END_SRC
+
+and then attached as an inline policy:
+#+BEGIN_SRC
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:AttachRolePolicy",
+                "iam:UpdateAssumeRolePolicy"
+            ],
+            "Resource": "arn:aws:iam::<IDNumber>:role/*"
+        }
+    ]
+}
+#+END_SRC
+
+If your aws connection is configured correctly then you can deploy with ~cargo lambda deploy~. Generally these tasks are handled through the Makefile, so just use that.
+
+** Using the Command Line app
+Using the command line app can be a useful way to understand what's going on under the hood. It's also great for debugging.
 
 *** Start With Strava Data
 
@@ -45,87 +92,5 @@ You need to have the Authorization header with "Bearer <ACCESS_TOKEN>" to get va
 
 Now save that response to a file. This is the file you'll use to run the command line app.
 
-*** The Web Version
-
-The web version uses ~trunk~ and can be started with ~trunk serve~. 
-
-This uses Auth0 as it's backend so I didn't have to develop a webserver. A key part of it is that Auth0 needs to be configured with a way to fetch the user profile. That is configured with this:
-
-#+BEGIN_SRC javascript
-function(accessToken, ctx, cb) {
-    const profile = {};
-    
-  	request.get(
-    {
-      url: "https://www.strava.com/api/v3/athlete",
-      headers: {
-        'Authorization': 'Bearer ' + accessToken,
-      }
-    },
-    (err, resp, body) => {
-      if (err) {
-        return cb(err);
-      }
-      if (resp.statusCode !== 200) {
-        return cb(new Error(body));
-      }
-      let bodyParsed;
-      try {
-        bodyParsed = JSON.parse(body);
-      } catch (jsonError) {
-        return cb(new Error(body));
-      }
-      const profile = {
-        user_id: bodyParsed.id
-      };
-      cb(null, profile);
-    }
-  );
-  }
-#+END_SRC
-
-That gets the user id from Strava and allows Auth0 to authenticate.
-
-** New Deployment Strategy
-
-*** Website (heart-rate-drift) in Netlify so its easy to get via www.paytonrules.com/heart-rate-drift
-*** OAuth exchange via an AWS function using cargo-lambda
-**** But how do I store my clientID and client Secret? We shall see
-*** Note - to deploy I tried several directions. Eventually I followed these: (maybe) https://docs.aws.amazon.com/lambda/latest/dg/rust-package.html
-
-
-***********************************
-*** AWS Setup
-The deployment of the function at ~functions/strava-oauth-exchange~ is done by calling ~cargo lambda deploy strava-oauth-exchange --enable-function-url~ from that directory. This requires a user to be setup in AWS lambda with permissions. 
-
-You need to use ~aws configure~ to setup credentials matching that user, and you need to make sure the user is setup correctly. It needs to have:
-AWSLambda_FullAccess
-AWSLambdaBasicExecutionRole
-AWSLambdaRole
-
-and then attached as an inline policy:
-#+BEGIN_SRC:
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "VisualEditor0",
-            "Effect": "Allow",
-            "Action": [
-                "iam:CreateRole",
-                "iam:AttachRolePolicy",
-                "iam:UpdateAssumeRolePolicy"
-            ],
-            "Resource": "arn:aws:iam::<IDNumber>:role/*"
-        }
-    ]
-}
-#+END_SRC:
-
-Where IDNumber matches the IAM number for your user.
-
-
-
-- Describe using aws configure, the user you needed to create
-- Make note of the cross-compilation struggles
-
+* Note on deployment
+To deploy I tried several directions. Eventually I followed these: https://docs.aws.amazon.com/lambda/latest/dg/rust-package.html
