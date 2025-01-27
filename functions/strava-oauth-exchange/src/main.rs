@@ -1,5 +1,4 @@
 use lambda_http::{run, service_fn, tracing, Error, Request, Response};
-use tokio;
 
 mod http_handler;
 
