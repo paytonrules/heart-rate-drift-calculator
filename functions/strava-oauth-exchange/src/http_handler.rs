@@ -1,5 +1,6 @@
 use anyhow::Context;
 use lambda_http::{Error, Request, RequestExt, Response};
+use serde::{Deserialize, Serialize};
 use std::env;
 
 const OAUTH_TOKEN_PATH: &str = "/oauth/token";
@@ -9,8 +10,13 @@ const CLIENT_SECRET_QUERY_PARAM_NAME: &str = "client_secret";
 
 // TODO: There is a bit of a mix and match here as you've got 'strava' specific code here,
 // but also generic code here. I'm essentially undecided - should everyting strava be in main?
-const CLIENT_ID_KEY: &str = "STRAVA_CLIENT";
+const CLIENT_ID_KEY: &str = "STRAVA_CLIENT_ID";
 const CLIENT_SECRET_KEY: &str = "STRAVA_CLIENT_SECRET";
+
+#[derive(Serialize, Deserialize)]
+struct OAuthBearerToken {
+    access_token: String,
+}
 
 /// The secret service trait allows injecting secrets via a templated function
 /// By default it uses the enviornment
@@ -32,12 +38,13 @@ pub(crate) async fn parse_redirect_from_strava<T: SecretService>(
     url: &str,
     secret_service: &T,
 ) -> Result<Response<String>, Error> {
-    // Get the code from the event
+    // Get the code from incoming request (via redirect from OAuth provider)
     let code = event
         .query_string_parameters_ref()
         .and_then(|params| params.first(CODE_QUERY_PARAM_NAME))
         .context("Code query param is not present")?;
 
+    // Make a request to the oauth/token exchange
     let client = reqwest::Client::new();
     let path = format!("{}{}", url, OAUTH_TOKEN_PATH);
 
@@ -57,14 +64,41 @@ pub(crate) async fn parse_redirect_from_strava<T: SecretService>(
         ])
         .send()
         .await? // I don't have a test for this `?` - sue me
-        .error_for_status()?;
+        .error_for_status()?
+        .json::<OAuthBearerToken>()
+        .await?;
 
+    // Construct the response for this call, with the necessary javascript and the access token
+    let response = format!(
+        r#"
+    <!DOCTYPE html>
+<html>
+<head>
+    <title>Close Popup</title>
+    <script type="text/javascript">
+        window.onload = function() {{
+            window.opener.postMessage({{ type: 'oauth2Complete', accessToken: '{}' }}, '*');
+
+            // Close the popup window
+            window.close();
+        }};
+    </script>
+</head>
+<body>
+    <p>Authentication complete. Closing window...</p>
+</body>
+</html>
+"#,
+        token_exchange.access_token
+    );
+
+    // token_exchange.text()?.await
     // Return something that implements IntoResponse.
     // It will be serialized to the right response event automatically by the runtime
     let resp = Response::builder()
         .status(200)
         .header("content-type", "text/html")
-        .body(token_exchange.text().await?)
+        .body(response)
         .map_err(Box::new)?;
 
     Ok(resp)
@@ -124,10 +158,17 @@ mod tests {
         const OAUTH_CODE: &str = "12345";
         let request = create_strava_incoming_request_with_code(OAUTH_CODE);
 
+        // Next we setup a miniature version of the OAuth JSON response. The real response has a
+        // lot of fields, but we only care about the one
+        const THE_TEST_TOKEN: &str = "The Test Token";
+        let response_json = OAuthBearerToken {
+            access_token: THE_TEST_TOKEN.to_owned(),
+        };
+
         // Finally prepare a mock server expecting the oauth/token request with the
         // code, client id and client secret
-        // If done right it will return the test token
-        const THE_TEST_TOKEN: &str = "The Test Token";
+        // If done right it will return a JSON response WITH an access token
+
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path(OAUTH_TOKEN_PATH))
@@ -143,7 +184,7 @@ mod tests {
                 "{}={}",
                 CLIENT_SECRET_QUERY_PARAM_NAME, TEST_CLIENT_SECRET
             )))
-            .respond_with(ResponseTemplate::new(200).set_body_string(THE_TEST_TOKEN))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response_json))
             .mount(&mock_server)
             .await;
 
@@ -152,7 +193,14 @@ mod tests {
             parse_redirect_from_strava(request, &mock_server.uri(), &test_secret_service).await?;
 
         let body_string = actual_response.body();
-        assert_eq!(body_string, THE_TEST_TOKEN);
+
+        // NOTE: The post doesn't have the entire value, just the access token
+        let expected_post_message = format!(
+            "window.opener.postMessage({{ type: 'oauth2Complete', accessToken: '{}' }}, '*');",
+            THE_TEST_TOKEN
+        );
+        assert!(body_string.contains(&expected_post_message));
+
         Ok(())
     }
 
