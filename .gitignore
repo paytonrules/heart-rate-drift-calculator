@@ -56,13 +56,13 @@ flycheck_*.el
 
 # End of https://www.toptal.com/developers/gitignore/api/emacs
 
+.netlify/
+
 # Image generated in readme
 pic.png
+strava-diagram.png
 
 dist/
 
 .DS_Store
-
-# Local Netlify folder
-.netlify
-netlify/functions/get-strava-activity/target
+.env
