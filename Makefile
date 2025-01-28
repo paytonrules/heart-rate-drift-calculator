@@ -1,3 +1,8 @@
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
+
 .PHONY: watch web dev lambda-build lambda-deploy
 
 # Remember to check for STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET
