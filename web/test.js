@@ -13,6 +13,20 @@ const login = async () => {
 		"_blank",
 		windowFeatures
 	);
+	window.addEventListener('message', function(event) {
+		// Ensure the message is from a trusted origin (optional but recommended)
+		// if (event.origin !== 'https://your-lambda-function-url') return;
+
+		if (event.data.type === 'oauth2Complete') {
+			const accessToken = event.data.accessToken;
+			console.log('Access token received:', accessToken);
+
+			// Use the access token (e.g., store it, make API calls, etc.)
+			// Example:
+			// localStorage.setItem('accessToken', accessToken);
+			// fetchUserData(accessToken);
+		}
+	});
 };
 
 const retrieveJSON = async () => {
