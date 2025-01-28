@@ -1457,6 +1457,7 @@ dependencies = [
  "anyhow",
  "lambda_http",
  "reqwest",
+ "serde",
  "tokio",
  "wiremock",
 ]
