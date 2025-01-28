@@ -3,20 +3,22 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-.PHONY: watch web dev lambda-build lambda-deploy
-
-# Remember to check for STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET
-watch:
-	cd functions/strava-oauth-exchange && cargo lambda watch
-
-web:
-	cd web && trunk serve
-
-dev:
-	make -j 2 web watch
+.PHONY: serve lambda-build lambda-deploy lambda-serve web-serve
 
 lambda-build:
 	cd functions/strava-oauth-exchange && cargo lambda build
 
 lambda-deploy: lambda-build
 	cd functions/strava-oauth-exchange && cargo lambda deploy strava-oauth-exchange --enable-function-url
+
+# Remember to check for STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET
+lambda-serve:
+	cd functions/strava-oauth-exchange && cargo lambda watch
+
+web-serve:
+	cd web && trunk serve
+
+serve:
+	make -j 2 web-serve lambda-serve
+
+
