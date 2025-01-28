@@ -1,5 +1,5 @@
-//const redirectUrl = "http://localhost:8888/.netlify/functions/get-strava-activity";
-const redirectUrl = "https://d2xltwdcunpbos34ryghup27yu0atbxw.lambda-url.us-east-1.on.aws";
+const redirectUrl = "http://localhost:9000/lambda-url/strava-oauth-exchange";
+// const redirectUrl = "https://d2xltwdcunpbos34ryghup27yu0atbxw.lambda-url.us-east-1.on.aws";
 const login = async () => {
 	const options = {
 		popup: "yes",
