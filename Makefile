@@ -9,3 +9,4 @@ web:
 dev:
 	make -j 2 web lambda
 
+# cargo lambda deploy strava-oauth-exchange --enable-function-url
